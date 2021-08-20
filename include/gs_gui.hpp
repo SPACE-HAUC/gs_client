@@ -71,6 +71,36 @@ void gs_gui_eps_window(NetDataClient *network_data, bool *EPS_window, int access
 void gs_gui_xband_window(global_data_t *global, bool *XBAND_window, int access_level, bool allow_transmission);
 
 /**
+* @brief 
+* 
+* @param global 
+* @param XBAND_TX_window 
+* @param access_level 
+* @param allow_transmission 
+*/
+void gs_gui_xband_tx_window(global_data_t *global, bool *XBAND_TX_window, int access_level, bool allow_transmission);
+
+/**
+* @brief 
+* 
+* @param global 
+* @param XBAND_RX_window 
+* @param access_level 
+* @param allow_transmission 
+*/
+void gs_gui_xband_rx_window(global_data_t *global, bool *XBAND_RX_window, int access_level, bool allow_transmission);
+
+/**
+* @brief 
+* 
+* @param global 
+* @param XBAND_TEST_window 
+* @param access_level 
+* @param allow_transmission 
+*/
+void gs_gui_xband_test_window(global_data_t *global, bool *XBAND_TEST_window, int access_level, bool allow_transmission);
+
+/**
  * @brief 
  * 
  * @param network_data 
@@ -133,14 +163,18 @@ void gs_gui_acs_upd_display_window(ACSRollingBuffer *acs_rolbuf, bool *ACS_UPD_d
  * @param ACS_window 
  * @param EPS_window 
  * @param XBAND_window 
+ * @param XBAND_TX_window 
+ * @param XBAND_RX_window 
+ * @param XBAND_TEST_window 
  * @param SW_UPD_window 
  * @param SYS_CTRL_window 
  * @param RX_display 
  * @param ACS_UPD_display 
  * @param allow_transmission 
- * @param auth 
+ * @param access_level 
+ * @param global 
  */
-void gs_gui_disp_control_panel_window(bool *DISP_control_panel, bool *ACS_window, bool *EPS_window, bool *XBAND_window, bool *SW_UPD_window, bool *SYS_CTRL_window, bool *RX_display, bool *ACS_UPD_display, bool *allow_transmission, int access_level, global_data_t *global);
+void gs_gui_disp_control_panel_window(bool *DISP_control_panel, bool *ACS_window, bool *EPS_window, bool *XBAND_window, bool *XBAND_TX_window, bool *XBAND_RX_window, bool *XBAND_TEST_window, bool *SW_UPD_window, bool *SYS_CTRL_window, bool *RX_display, bool *ACS_UPD_display, bool *allow_transmission, int access_level, global_data_t *global);
 
 /**
  * @brief 

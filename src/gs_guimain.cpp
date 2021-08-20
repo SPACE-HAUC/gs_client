@@ -94,10 +94,13 @@ int main(int, char **)
     bool allow_transmission = false;
     bool AUTH_control_panel = true;
     bool SETTINGS_window = false;
-    bool CONFIG_manager = false;
+    // bool CONFIG_manager = false;
+    bool XBAND_TX_window = false;       // For GS Roof XBand Config
+    bool XBAND_RX_window = false;       // For GS Haystack XBand config.
+    bool XBAND_TEST_window = false;     // For sending / receiving GS test frames.
     bool ACS_window = false;
     bool EPS_window = false;
-    bool XBAND_window = false;
+    bool XBAND_window = false;          // For talking to SH through UHF about SH's X-Band.       
     bool SW_UPD_window = false;
     bool SYS_CTRL_window = false;
     bool RX_display = false;
@@ -186,14 +189,29 @@ int main(int, char **)
         }
 
         // Radio Configurations Manager
-        if (CONFIG_manager)
+        // if (CONFIG_manager)
+        // {
+        //     gs_gui_config_manager_window(&CONFIG_manager, auth.access_level, allow_transmission, global);
+        // }
+
+        if (XBAND_TX_window)
         {
-            gs_gui_config_manager_window(&CONFIG_manager, auth.access_level, allow_transmission, global);
+            gs_gui_xband_tx_window(global, &XBAND_TX_window, auth.access_level, allow_transmission);
+        }
+
+        if (XBAND_RX_window)
+        {
+            gs_gui_xband_rx_window(global, &XBAND_RX_window, auth.access_level, allow_transmission);
+        }
+
+        if (XBAND_TEST_window)
+        {
+            gs_gui_xband_test_window(global, &XBAND_TEST_window, auth.access_level, allow_transmission);
         }
 
         if (DISP_control_panel)
         {
-            gs_gui_disp_control_panel_window(&DISP_control_panel, &ACS_window, &EPS_window, &XBAND_window, &SW_UPD_window, &SYS_CTRL_window, &RX_display, &ACS_UPD_display, &allow_transmission, auth.access_level, global);
+            gs_gui_disp_control_panel_window(&DISP_control_panel, &ACS_window, &EPS_window, &XBAND_window, &XBAND_TX_window, &XBAND_RX_window, &XBAND_TEST_window, &SW_UPD_window, &SYS_CTRL_window, &RX_display, &ACS_UPD_display, &allow_transmission, auth.access_level, global);
         }
 
         if (User_Manual)
@@ -247,16 +265,16 @@ int main(int, char **)
                 ImGui::EndTooltip();
             }
 
-            if (ImGui::Button("Radio Configs"))
-            {
-                CONFIG_manager = !CONFIG_manager;
-            }
-            if (ImGui::IsItemHovered() && global->settings->tooltips)
-            {
-                ImGui::BeginTooltip();
-                ImGui::SetTooltip("Toggle Radio Configuration Manager visibility.");
-                ImGui::EndTooltip();
-            }
+            // if (ImGui::Button("Radio Configs"))
+            // {
+            //     CONFIG_manager = !CONFIG_manager;
+            // }
+            // if (ImGui::IsItemHovered() && global->settings->tooltips)
+            // {
+            //     ImGui::BeginTooltip();
+            //     ImGui::SetTooltip("Toggle Radio Configuration Manager visibility.");
+            //     ImGui::EndTooltip();
+            // }
 
             if (SETTINGS_window)
             {
