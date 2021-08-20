@@ -1237,9 +1237,6 @@ void gs_gui_xband_tx_window(global_data_t *global, bool *XBAND_TX_window, int ac
         };
 
     NetData *network_data = global->network_data;
-    char *recv_status_buffer = global->recv_status_buffer;
-    char *read_status_buffer = global->read_status_buffer;
-    phy_config_t *rxphy = global->rxphy;
     phy_config_t *txphy = global->txphy;
 
     static char *mode_str[] = {"sleep", "fdd  ", "tdd  "};
@@ -1247,40 +1244,15 @@ void gs_gui_xband_tx_window(global_data_t *global, bool *XBAND_TX_window, int ac
     static bool first_pass = true;
     if (first_pass)
     {
-        global->refresh_rx_ui_data = true;
         global->refresh_tx_ui_data = true;
         first_pass = false;
     }
     
-
     if (ImGui::Begin("Rooftop X-Band Configuration", NULL))
     {
-        if (!global->xbrx_avail)
-            rxphy->pll_lock = false;
         if (!global->xbtx_avail)
             txphy->pll_lock = false;
-        if (rxphy->mode && txphy->mode && (rxphy->pll_freq == txphy->pll_freq) && (fabs(txphy->LO - rxphy->LO) < 1000))
-        {
-            rxphy->rssi = 40;
-        }
-        if (ImGui::Checkbox("Receiver Connection", &global->xbrx_avail))
-        {
-            // rxmode = 0;
-            // rxphy->mode = 0; // sleep
-            // snprintf(rxphy->curr_gainmode, sizeof(rxphy->curr_gainmode), "slow_attack");
-            // rxphy->temp = 20570;
-            // rxphy->rssi = 102;
-            // rxphy->bw = MHZ(10);
-            // rxphy->LO = GHZ(2.4);
-            // rxphy->samp = MHZ(10);
-            // rx_samp = HZ_M(rxphy->samp);
-            // rx_lo = HZ_M(rxphy->LO);
-            // rx_bw = HZ_M(rxphy->bw);
-            // rxphy->pll_lock = 0;
-            // rxphy->gain = -60; // set gain to low for RX
-        }
         ImGui::SameLine();
-
         if (ImGui::Checkbox("Transmitter Connection", &global->xbtx_avail))
         {
             // dbprintlf(GREEN_FG "XBTX AVAILABLE!");
@@ -1297,94 +1269,6 @@ void gs_gui_xband_tx_window(global_data_t *global, bool *XBAND_TX_window, int ac
             // txphy->pll_lock = 0;
             // txphy->gain = 0;
             // tx_gain = 0;
-        }
-        ImGui::Separator();
-        ImGui::Separator();
-        ImGui::Text("Receiver Configuration");
-        ImGui::Columns(5, "xb_rx_sensors", true);
-        ImGui::Text("PLL Lock: %s", rxphy->pll_lock ? "YES" : "NO ");
-        ImGui::NextColumn();
-        ImGui::Text("System Mode: %s", mode_str[rxphy->mode]);
-        ImGui::NextColumn();
-        ImGui::Text("Temperature: %.3f °C", rxphy->temp * 0.001);
-        ImGui::NextColumn();
-        ImGui::Text("RSSI: -%.2lf dB", rxphy->rssi);
-        ImGui::NextColumn();
-        ImGui::Text("Gain Control: %s", rxphy->curr_gainmode);
-        ImGui::Columns(1);
-        ImGui::Separator();
-        ImGui::Columns(3, "xb_rx_freqs", true);
-        ImGui::Text("LO: %lld Hz", rxphy->LO);
-        ImGui::NextColumn();
-        ImGui::Text("Samp: %lld Hz", rxphy->bw);
-        ImGui::NextColumn();
-        ImGui::Text("BW: %lld Hz", rxphy->samp);
-        ImGui::Columns(1);
-        ImGui::Separator();
-        ImGui::Combo("PLL Frequency##RX", &(rxphy->pll_freq), pll_freq_str, IM_ARRAYSIZE(pll_freq_str));
-        if (ImGui::Button("Initialize PLL##RX") && global->xbrx_avail)
-        {
-            rxphy->pll_lock = true;
-
-            XBAND_COMMAND command = XBC_INIT_PLL;
-            NetFrame *network_frame = new NetFrame((unsigned char *)&command, sizeof(command), NetType::XBAND_COMMAND, NetVertex::HAYSTACK);
-            network_frame->sendFrame(network_data);
-            delete network_frame;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Disable PLL##RX"))
-        {
-            rxphy->pll_lock = false;
-
-            XBAND_COMMAND command = XBC_DISABLE_PLL;
-            NetFrame *network_frame = new NetFrame((unsigned char *)&command, sizeof(command), NetType::XBAND_COMMAND, NetVertex::HAYSTACK);
-            network_frame->sendFrame(network_data);
-            delete network_frame;
-        }
-        ImGui::Separator();
-        ImGui::InputFloat("RX Sample Rate (MHz)", &global->rx_samp, 0, 0, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue);
-        ImGui::InputFloat("RX LO (MHz)", &global->rx_lo, 0, 0, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue);
-        ImGui::InputFloat("RX BW (MHz)", &global->rx_bw, 0, 0, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue);
-        ImGui::InputText("RX Filter", rxphy->ftr_name, sizeof(rxphy->ftr_name), ImGuiInputTextFlags_AutoSelectAll);
-        ImGui::Combo("Mode##RX", (int *)&global->rxmode, mode_str, IM_ARRAYSIZE(mode_str));
-        if (ImGui::Button("Apply Configuration##RX"))
-        {
-            global->refresh_rx_ui_data = true;
-
-            if (global->rxmode)
-            {
-                rxphy->mode = global->rxmode;
-                rxphy->samp = MHZ(global->rx_samp);
-                rxphy->LO = MHZ(global->rx_lo);
-                rxphy->bw = MHZ(global->rx_bw);
-            }
-            else if (!global->rx_armed)
-                rxphy->mode = global->rxmode;
-
-            NetFrame *network_frame = new NetFrame((unsigned char *)&rxphy, sizeof(phy_config_t), NetType::XBAND_CONFIG, NetVertex::HAYSTACK);
-            network_frame->sendFrame(network_data);
-            delete network_frame;
-        }
-        if (ImGui::Button("Refresh RX Data"))
-        {
-            global->refresh_rx_ui_data = true;
-            // dbprintlf("RX UI marked for refresh.");
-        }
-
-        static int r_rx_i = 0;
-        static int r_rx_factor = 10;
-        if (global->refresh_rx_ui_data)
-        {
-            ImGui::SameLine();
-            r_rx_i = (r_rx_i + 1) % (5 * r_rx_factor);
-            ImGui::Text("%s", refreshing_icon[r_rx_i / r_rx_factor]);
-        }
-        else
-        {
-            if (r_rx_i)
-            {
-                r_rx_i = 0;
-            }
         }
 
         ImGui::Separator();
@@ -1484,9 +1368,174 @@ void gs_gui_xband_tx_window(global_data_t *global, bool *XBAND_TX_window, int ac
                 r_tx_i = 0;
             }
         }
+    }
+    ImGui::End();
+}
+
+void gs_gui_xband_rx_window(global_data_t *global, bool *XBAND_RX_window, int access_level, bool allow_transmission)
+{
+    static char refreshing_icon[5][11] =
+        {
+            "    ||    ",
+            "   |  |   ",
+            "  |    |  ",
+            " |      | ",
+            "|        |",
+        };
+
+    NetData *network_data = global->network_data;
+    char *recv_status_buffer = global->recv_status_buffer;
+    char *read_status_buffer = global->read_status_buffer;
+    phy_config_t *rxphy = global->rxphy;
+
+    static char *mode_str[] = {"sleep", "fdd  ", "tdd  "};
+
+    static bool first_pass = true;
+    if (first_pass)
+    {
+        global->refresh_rx_ui_data = true;
+        first_pass = false;
+    }
+    
+    if (ImGui::Begin("Haystack X-Band Configuration", NULL))
+    {
+        if (!global->xbrx_avail)
+            rxphy->pll_lock = false;
+        if (rxphy->mode && global->txphy->mode && (rxphy->pll_freq == global->txphy->pll_freq) && (fabs(global->txphy->LO - rxphy->LO) < 1000))
+        {
+            rxphy->rssi = 40;
+        }
+        if (ImGui::Checkbox("Receiver Connection", &global->xbrx_avail))
+        {
+            // rxmode = 0;
+            // rxphy->mode = 0; // sleep
+            // snprintf(rxphy->curr_gainmode, sizeof(rxphy->curr_gainmode), "slow_attack");
+            // rxphy->temp = 20570;
+            // rxphy->rssi = 102;
+            // rxphy->bw = MHZ(10);
+            // rxphy->LO = GHZ(2.4);
+            // rxphy->samp = MHZ(10);
+            // rx_samp = HZ_M(rxphy->samp);
+            // rx_lo = HZ_M(rxphy->LO);
+            // rx_bw = HZ_M(rxphy->bw);
+            // rxphy->pll_lock = 0;
+            // rxphy->gain = -60; // set gain to low for RX
+        }
+        ImGui::SameLine();
 
         ImGui::Separator();
         ImGui::Separator();
+        ImGui::Text("Receiver Configuration");
+        ImGui::Columns(5, "xb_rx_sensors", true);
+        ImGui::Text("PLL Lock: %s", rxphy->pll_lock ? "YES" : "NO ");
+        ImGui::NextColumn();
+        ImGui::Text("System Mode: %s", mode_str[rxphy->mode]);
+        ImGui::NextColumn();
+        ImGui::Text("Temperature: %.3f °C", rxphy->temp * 0.001);
+        ImGui::NextColumn();
+        ImGui::Text("RSSI: -%.2lf dB", rxphy->rssi);
+        ImGui::NextColumn();
+        ImGui::Text("Gain Control: %s", rxphy->curr_gainmode);
+        ImGui::Columns(1);
+        ImGui::Separator();
+        ImGui::Columns(3, "xb_rx_freqs", true);
+        ImGui::Text("LO: %lld Hz", rxphy->LO);
+        ImGui::NextColumn();
+        ImGui::Text("Samp: %lld Hz", rxphy->bw);
+        ImGui::NextColumn();
+        ImGui::Text("BW: %lld Hz", rxphy->samp);
+        ImGui::Columns(1);
+        ImGui::Separator();
+        ImGui::Combo("PLL Frequency##RX", &(rxphy->pll_freq), pll_freq_str, IM_ARRAYSIZE(pll_freq_str));
+        if (ImGui::Button("Initialize PLL##RX") && global->xbrx_avail)
+        {
+            rxphy->pll_lock = true;
+
+            XBAND_COMMAND command = XBC_INIT_PLL;
+            NetFrame *network_frame = new NetFrame((unsigned char *)&command, sizeof(command), NetType::XBAND_COMMAND, NetVertex::HAYSTACK);
+            network_frame->sendFrame(network_data);
+            delete network_frame;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Disable PLL##RX"))
+        {
+            rxphy->pll_lock = false;
+
+            XBAND_COMMAND command = XBC_DISABLE_PLL;
+            NetFrame *network_frame = new NetFrame((unsigned char *)&command, sizeof(command), NetType::XBAND_COMMAND, NetVertex::HAYSTACK);
+            network_frame->sendFrame(network_data);
+            delete network_frame;
+        }
+        ImGui::Separator();
+        ImGui::InputFloat("RX Sample Rate (MHz)", &global->rx_samp, 0, 0, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::InputFloat("RX LO (MHz)", &global->rx_lo, 0, 0, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::InputFloat("RX BW (MHz)", &global->rx_bw, 0, 0, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::InputText("RX Filter", rxphy->ftr_name, sizeof(rxphy->ftr_name), ImGuiInputTextFlags_AutoSelectAll);
+        ImGui::Combo("Mode##RX", (int *)&global->rxmode, mode_str, IM_ARRAYSIZE(mode_str));
+        if (ImGui::Button("Apply Configuration##RX"))
+        {
+            global->refresh_rx_ui_data = true;
+
+            if (global->rxmode)
+            {
+                rxphy->mode = global->rxmode;
+                rxphy->samp = MHZ(global->rx_samp);
+                rxphy->LO = MHZ(global->rx_lo);
+                rxphy->bw = MHZ(global->rx_bw);
+            }
+            else if (!global->rx_armed)
+                rxphy->mode = global->rxmode;
+
+            NetFrame *network_frame = new NetFrame((unsigned char *)&rxphy, sizeof(phy_config_t), NetType::XBAND_CONFIG, NetVertex::HAYSTACK);
+            network_frame->sendFrame(network_data);
+            delete network_frame;
+        }
+        if (ImGui::Button("Refresh RX Data"))
+        {
+            global->refresh_rx_ui_data = true;
+            // dbprintlf("RX UI marked for refresh.");
+        }
+
+        static int r_rx_i = 0;
+        static int r_rx_factor = 10;
+        if (global->refresh_rx_ui_data)
+        {
+            ImGui::SameLine();
+            r_rx_i = (r_rx_i + 1) % (5 * r_rx_factor);
+            ImGui::Text("%s", refreshing_icon[r_rx_i / r_rx_factor]);
+        }
+        else
+        {
+            if (r_rx_i)
+            {
+                r_rx_i = 0;
+            }
+        }
+    }
+    ImGui::End();
+}
+
+void gs_gui_xband_test_window(global_data_t *global, bool *XBAND_TEST_window, int access_level, bool allow_transmission)
+{
+    static char refreshing_icon[5][11] =
+        {
+            "    ||    ",
+            "   |  |   ",
+            "  |    |  ",
+            " |      | ",
+            "|        |",
+        };
+
+    NetData *network_data = global->network_data;
+    char *recv_status_buffer = global->recv_status_buffer;
+    char *read_status_buffer = global->read_status_buffer;
+    phy_config_t *rxphy = global->rxphy;
+    phy_config_t *txphy = global->txphy;
+
+    static char *mode_str[] = {"sleep", "fdd  ", "tdd  "};
+    
+    if (ImGui::Begin("Ground Station X-Band Testing", NULL))
+    {
         if (global->xbrx_avail && (rxphy->mode > 0) && !global->rx_armed)
             ImGui::PushStyleColor(0, COLOR_GREEN);
         else if (global->rx_armed)
@@ -1674,14 +1723,6 @@ void gs_gui_xband_tx_window(global_data_t *global, bool *XBAND_TX_window, int ac
         ImGui::InputText("Read Status", read_status_buffer, 256, ImGuiInputTextFlags_ReadOnly);
     }
     ImGui::End();
-}
-
-void gs_gui_xband_rx_window(global_data_t *global, bool *XBAND_RX_window, int access_level, bool allow_transmission)
-{
-}
-
-void gs_gui_xband_test_window(global_data_t *global, bool *XBAND_TEST_window, int access_level, bool allow_transmission)
-{
 }
 
 void gs_gui_sw_upd_window(global_data_t *global, bool *SW_UPD_window, int access_level, bool allow_transmission)
@@ -2359,7 +2400,7 @@ void gs_gui_acs_upd_display_window(ACSRollingBuffer *acs_rolbuf, bool *ACS_UPD_d
     }
 }
 
-void gs_gui_disp_control_panel_window(bool *DISP_control_panel, bool *ACS_window, bool *EPS_window, bool *XBAND_window, bool *XBAND_TX_window, bool *XBAND_RX_window, bool *XBAND_TEST_window, bool *SW_UPD_window, bool *SYS_CTRL_window, bool *RX_display, bool *ACS_UPD_display, bool *allow_transmission, int access_level, global_data_t *global)
+void gs_gui_disp_control_panel_window(bool *DISP_control_panel, bool *ACS_window, bool *EPS_window, bool *XBAND_window, bool *SW_UPD_window, bool *SYS_CTRL_window, bool *RX_display, bool *ACS_UPD_display, bool *allow_transmission, int access_level, global_data_t *global)
 {
     if (ImGui::Begin("SPACE-HAUC I/O Displays", DISP_control_panel, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_HorizontalScrollbar))
     {
@@ -2386,17 +2427,6 @@ void gs_gui_disp_control_panel_window(bool *DISP_control_panel, bool *ACS_window
         ImGui::Separator();
         ImGui::Separator();
 
-        ImGui::Text("Ground Station");
-
-        ImGui::Checkbox("X-Band TX (Rooftop) Config", XBAND_TX_window);
-        ImGui::Checkbox("X-Band RX (Haystack) Config", XBAND_RX_window);
-        ImGui::Checkbox("X-Band Test Panel", XBAND_TEST_window);
-
-        ImGui::Separator();
-
-        ImGui::Separator();
-        ImGui::Separator();
-
         if (ImGui::Button("Toggle Transmissions Lock"))
         {
             *allow_transmission = !(*allow_transmission);
@@ -2411,6 +2441,19 @@ void gs_gui_disp_control_panel_window(bool *DISP_control_panel, bool *ACS_window
         *allow_transmission ? ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), " UNLOCKED ") : ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "  LOCKED  ");
     }
     ImGui::End();
+}
+
+void gs_gui_gsio_control_panel_window(bool *GSIO_control_panel, bool *XBAND_TX_window, bool *XBAND_RX_window, bool *XBAND_TEST_window, bool *allow_transmission, int access_level, global_data_t *global)
+{
+    if (ImGui::Begin("Ground Station I/O Displays", GSIO_control_panel, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_HorizontalScrollbar))
+    {
+        ImGui::Text("Input");
+
+        ImGui::Checkbox("X-Band TX (Rooftop) Config", XBAND_TX_window);
+        ImGui::Checkbox("X-Band RX (Haystack) Config", XBAND_RX_window);
+        ImGui::Checkbox("X-Band Test Panel", XBAND_TEST_window);
+    }
+    ImGui::End();  
 }
 
 void gs_gui_user_manual_window(bool *User_Manual)

@@ -163,9 +163,6 @@ void gs_gui_acs_upd_display_window(ACSRollingBuffer *acs_rolbuf, bool *ACS_UPD_d
  * @param ACS_window 
  * @param EPS_window 
  * @param XBAND_window 
- * @param XBAND_TX_window 
- * @param XBAND_RX_window 
- * @param XBAND_TEST_window 
  * @param SW_UPD_window 
  * @param SYS_CTRL_window 
  * @param RX_display 
@@ -174,7 +171,20 @@ void gs_gui_acs_upd_display_window(ACSRollingBuffer *acs_rolbuf, bool *ACS_UPD_d
  * @param access_level 
  * @param global 
  */
-void gs_gui_disp_control_panel_window(bool *DISP_control_panel, bool *ACS_window, bool *EPS_window, bool *XBAND_window, bool *XBAND_TX_window, bool *XBAND_RX_window, bool *XBAND_TEST_window, bool *SW_UPD_window, bool *SYS_CTRL_window, bool *RX_display, bool *ACS_UPD_display, bool *allow_transmission, int access_level, global_data_t *global);
+void gs_gui_disp_control_panel_window(bool *DISP_control_panel, bool *ACS_window, bool *EPS_window, bool *XBAND_window, bool *SW_UPD_window, bool *SYS_CTRL_window, bool *RX_display, bool *ACS_UPD_display, bool *allow_transmission, int access_level, global_data_t *global);
+
+/**
+ * @brief 
+ * 
+ * @param GSIO_control_panel 
+ * @param XBAND_TX_window 
+ * @param XBAND_RX_window 
+ * @param XBAND_TEST_window 
+ * @param allow_transmission 
+ * @param access_level 
+ * @param global 
+ */
+void gs_gui_gsio_control_panel_window(bool *GSIO_control_panel, bool *XBAND_TX_window, bool *XBAND_RX_window, bool *XBAND_TEST_window, bool *allow_transmission, int access_level, global_data_t *global);
 
 /**
  * @brief 

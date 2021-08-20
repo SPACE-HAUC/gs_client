@@ -95,17 +95,18 @@ int main(int, char **)
     bool AUTH_control_panel = true;
     bool SETTINGS_window = false;
     // bool CONFIG_manager = false;
-    bool XBAND_TX_window = false;       // For GS Roof XBand Config
-    bool XBAND_RX_window = false;       // For GS Haystack XBand config.
-    bool XBAND_TEST_window = false;     // For sending / receiving GS test frames.
+    bool XBAND_TX_window = false;   // For GS Roof XBand Config
+    bool XBAND_RX_window = false;   // For GS Haystack XBand config.
+    bool XBAND_TEST_window = false; // For sending / receiving GS test frames.
     bool ACS_window = false;
     bool EPS_window = false;
-    bool XBAND_window = false;          // For talking to SH through UHF about SH's X-Band.       
+    bool XBAND_window = false; // For talking to SH through UHF about SH's X-Band.
     bool SW_UPD_window = false;
     bool SYS_CTRL_window = false;
     bool RX_display = false;
     bool ACS_UPD_display = false;
     bool DISP_control_panel = true;
+    bool GSIO_control_panel = false;
     bool CONNS_manager = true;
     bool User_Manual = false;
 
@@ -212,7 +213,12 @@ int main(int, char **)
 
         if (DISP_control_panel)
         {
-            gs_gui_disp_control_panel_window(&DISP_control_panel, &ACS_window, &EPS_window, &XBAND_window, &XBAND_TX_window, &XBAND_RX_window, &XBAND_TEST_window, &SW_UPD_window, &SYS_CTRL_window, &RX_display, &ACS_UPD_display, &allow_transmission, auth.access_level, global);
+            gs_gui_disp_control_panel_window(&DISP_control_panel, &ACS_window, &EPS_window, &XBAND_window, &SW_UPD_window, &SYS_CTRL_window, &RX_display, &ACS_UPD_display, &allow_transmission, auth.access_level, global);
+        }
+
+        if (GSIO_control_panel)
+        {
+            gs_gui_gsio_control_panel_window(&GSIO_control_panel, &XBAND_TX_window, &XBAND_RX_window, &XBAND_TEST_window, &allow_transmission, auth.access_level, global);
         }
 
         if (User_Manual)
@@ -252,6 +258,17 @@ int main(int, char **)
             {
                 ImGui::BeginTooltip();
                 ImGui::SetTooltip("Toggle SPACE-HAUC I/O Displays Control Panel visibility.");
+                ImGui::EndTooltip();
+            }
+
+            if (ImGui::Button("Ground Station I/O"))
+            {
+                GSIO_control_panel = !GSIO_control_panel;
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::BeginTooltip();
+                ImGui::SetTooltip("Toggle Ground Station I/O Displays Control Panel visibility.");
                 ImGui::EndTooltip();
             }
 
@@ -311,31 +328,31 @@ int main(int, char **)
 
             switch (auth.access_level)
             {
-                case 0:
-                {
-                    ImGui::Text("  [LOW LEVEL ACCESS]");
-                    break;
-                }
-                case 1:
-                {
-                    ImGui::Text("  [TEAM MEMBER ACCESS]");
-                    break;
-                }
-                case 2:
-                {
-                    ImGui::Text("  [PRIORITY ACCESS]");
-                    break;
-                }
-                case 3:
-                {
-                    ImGui::Text("  [PROJECT MANAGER ACCESS]");
-                    break;
-                }
-                default:
-                {
-                    ImGui::Text("  [ERR: UNKNOWN ACCESS LEVEL]");
-                    break;
-                }
+            case 0:
+            {
+                ImGui::Text("  [LOW LEVEL ACCESS]");
+                break;
+            }
+            case 1:
+            {
+                ImGui::Text("  [TEAM MEMBER ACCESS]");
+                break;
+            }
+            case 2:
+            {
+                ImGui::Text("  [PRIORITY ACCESS]");
+                break;
+            }
+            case 3:
+            {
+                ImGui::Text("  [PROJECT MANAGER ACCESS]");
+                break;
+            }
+            default:
+            {
+                ImGui::Text("  [ERR: UNKNOWN ACCESS LEVEL]");
+                break;
+            }
             }
             ImGui::Text("%fx%f", ImGui::GetWindowWidth(), ImGui::GetWindowHeight());
             ImGui::Text("\t\t Uptime: %.02f \t\t Framerate: %.02f", ImGui::GetTime(), ImGui::GetIO().Framerate);
