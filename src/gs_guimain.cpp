@@ -111,6 +111,7 @@ int main(int, char **)
 
     // Set-up and start the RX thread.
     pthread_t rx_thread_id, polling_thread_id;
+    global->network_data->thread_status = 1;
     pthread_create(&rx_thread_id, NULL, gs_rx_thread, global);
     pthread_create(&polling_thread_id, NULL, gs_polling_thread, global->network_data);
 

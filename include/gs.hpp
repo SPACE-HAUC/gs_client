@@ -29,6 +29,15 @@
 #define RECV_TIMEOUT 15    // seconds
 #define SERVER_POLL_RATE 5 // once per this many seconds
 
+#define MHZ(x) ((long long)(x * 1000000.0 + .5))
+#define GHZ(x) ((long long)(x * 1000000000.0 + .5))
+#define HZ_M(x) (((double)x) * 1e-6)
+#define HZ_G(x) (((double)x) * 1e-9)
+
+#define COLOR_RED ImVec4(0xff, 0, 0, 0xff)
+#define COLOR_GREEN ImVec4(0x0, 0xff, 0x0, 0xff)
+#define COLOR_YLW ImVec4(0xff, 0xff, 0x0, 0xff)
+
 #define NACK_NO_UHF 0x756866 // Roof UHF says it cannot access UHF communications.
 
 // Function magic for system restart command, replaces .cmd value.
@@ -385,10 +394,6 @@ typedef struct
 
 /// X-Band ///
 
-// connection status
-static bool xbtx_avail = false;
-static bool xbrx_avail = false;
-
 enum TRX_MODE
 {
     MODE_TX = 0,
@@ -403,6 +408,20 @@ enum ensm_mode
 };
 
 static char *pll_freq_str[] = {"5900 MHz", "4750 MHz"};
+
+static unsigned char test_cmd[56] = "This is a test of the emergency alert broadcast system.";
+
+typedef enum
+{
+    RX_FRAME_INVALID = -30,
+    RX_INVALID_GUID,
+    RX_PACK_SZ_ZERO,
+    RX_NUM_FRAMES_ZERO,
+    RX_FRAME_SZ_ZERO,
+    RX_THREAD_SPAWN,
+    RX_FRAME_CRC_FAILED,
+    RX_MALLOC_FAILED,
+} RXMODEM_ERROR;
 
 /**
  * @brief Authentication structure, used to store auth-related information.
@@ -456,8 +475,34 @@ typedef struct
     bool xbtx_avail; // Is ROOFUHF connected?
     phy_config_t rxphy[1]; // Receiver configuration.
     phy_config_t txphy[1]; // Transmitter configuration.
+    char recv_status_buffer[256];
+    char read_status_buffer[256];
+    int last_xbrx_status;
+    int last_xbread_status;
+    bool refresh_rx_ui_data;
+    bool refresh_tx_ui_data;
+    bool rx_armed;
+    float rx_samp;
+    float rx_lo;
+    float rx_bw;
+    int rxmode;
+    float tx_samp;
+    float tx_lo;
+    float tx_bw;
+    int txmode;
+    float tx_gain;
+    int MTU;
+    uint16_t mega_packet_crc;
+    int mega_packet_file_size;
+} global_data_t; 
 
-} global_data_t;
+enum XBAND_COMMAND
+{
+    XBC_INIT_PLL = 0,
+    XBC_DISABLE_PLL = 1,
+    XBC_ARM_RX = 2,
+    XBC_DISARM_RX = 3,
+};
 
 // typedef struct
 // {

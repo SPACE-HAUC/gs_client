@@ -15,6 +15,9 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <cmath>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "gs.hpp"
 #include "gs_gui.hpp"
 #include "meb_debug.hpp"
@@ -1216,19 +1219,469 @@ void gs_gui_xband_window(global_data_t *global, bool *XBAND_window, int access_l
     ImGui::End();
 }
 
+// BOOKMARK
+
+// BOOKMARK
+
+// BOOKMARK
+
 void gs_gui_xband_tx_window(global_data_t *global, bool *XBAND_TX_window, int access_level, bool allow_transmission)
 {
+    static char refreshing_icon[5][11] =
+        {
+            "    ||    ",
+            "   |  |   ",
+            "  |    |  ",
+            " |      | ",
+            "|        |",
+        };
+
+    NetData *network_data = global->network_data;
+    char *recv_status_buffer = global->recv_status_buffer;
+    char *read_status_buffer = global->read_status_buffer;
+    phy_config_t *rxphy = global->rxphy;
+    phy_config_t *txphy = global->txphy;
+
+    static char *mode_str[] = {"sleep", "fdd  ", "tdd  "};
+
+    static bool first_pass = true;
+    if (first_pass)
+    {
+        global->refresh_rx_ui_data = true;
+        global->refresh_tx_ui_data = true;
+        first_pass = false;
+    }
     
+
+    if (ImGui::Begin("Rooftop X-Band Configuration", NULL))
+    {
+        if (!global->xbrx_avail)
+            rxphy->pll_lock = false;
+        if (!global->xbtx_avail)
+            txphy->pll_lock = false;
+        if (rxphy->mode && txphy->mode && (rxphy->pll_freq == txphy->pll_freq) && (fabs(txphy->LO - rxphy->LO) < 1000))
+        {
+            rxphy->rssi = 40;
+        }
+        if (ImGui::Checkbox("Receiver Connection", &global->xbrx_avail))
+        {
+            // rxmode = 0;
+            // rxphy->mode = 0; // sleep
+            // snprintf(rxphy->curr_gainmode, sizeof(rxphy->curr_gainmode), "slow_attack");
+            // rxphy->temp = 20570;
+            // rxphy->rssi = 102;
+            // rxphy->bw = MHZ(10);
+            // rxphy->LO = GHZ(2.4);
+            // rxphy->samp = MHZ(10);
+            // rx_samp = HZ_M(rxphy->samp);
+            // rx_lo = HZ_M(rxphy->LO);
+            // rx_bw = HZ_M(rxphy->bw);
+            // rxphy->pll_lock = 0;
+            // rxphy->gain = -60; // set gain to low for RX
+        }
+        ImGui::SameLine();
+
+        if (ImGui::Checkbox("Transmitter Connection", &global->xbtx_avail))
+        {
+            // dbprintlf(GREEN_FG "XBTX AVAILABLE!");
+            // txmode = 0;
+            // txphy->mode = 0; // sleep
+            // txphy->temp = 22630;
+            // txphy->rssi = 0;
+            // txphy->bw = MHZ(10);
+            // txphy->LO = GHZ(2.45);
+            // txphy->samp = MHZ(10);
+            // tx_samp = HZ_M(txphy->samp);
+            // tx_lo = HZ_M(txphy->LO);
+            // tx_bw = HZ_M(txphy->bw);
+            // txphy->pll_lock = 0;
+            // txphy->gain = 0;
+            // tx_gain = 0;
+        }
+        ImGui::Separator();
+        ImGui::Separator();
+        ImGui::Text("Receiver Configuration");
+        ImGui::Columns(5, "xb_rx_sensors", true);
+        ImGui::Text("PLL Lock: %s", rxphy->pll_lock ? "YES" : "NO ");
+        ImGui::NextColumn();
+        ImGui::Text("System Mode: %s", mode_str[rxphy->mode]);
+        ImGui::NextColumn();
+        ImGui::Text("Temperature: %.3f °C", rxphy->temp * 0.001);
+        ImGui::NextColumn();
+        ImGui::Text("RSSI: -%.2lf dB", rxphy->rssi);
+        ImGui::NextColumn();
+        ImGui::Text("Gain Control: %s", rxphy->curr_gainmode);
+        ImGui::Columns(1);
+        ImGui::Separator();
+        ImGui::Columns(3, "xb_rx_freqs", true);
+        ImGui::Text("LO: %lld Hz", rxphy->LO);
+        ImGui::NextColumn();
+        ImGui::Text("Samp: %lld Hz", rxphy->bw);
+        ImGui::NextColumn();
+        ImGui::Text("BW: %lld Hz", rxphy->samp);
+        ImGui::Columns(1);
+        ImGui::Separator();
+        ImGui::Combo("PLL Frequency##RX", &(rxphy->pll_freq), pll_freq_str, IM_ARRAYSIZE(pll_freq_str));
+        if (ImGui::Button("Initialize PLL##RX") && global->xbrx_avail)
+        {
+            rxphy->pll_lock = true;
+
+            XBAND_COMMAND command = XBC_INIT_PLL;
+            NetFrame *network_frame = new NetFrame((unsigned char *)&command, sizeof(command), NetType::XBAND_COMMAND, NetVertex::HAYSTACK);
+            network_frame->sendFrame(network_data);
+            delete network_frame;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Disable PLL##RX"))
+        {
+            rxphy->pll_lock = false;
+
+            XBAND_COMMAND command = XBC_DISABLE_PLL;
+            NetFrame *network_frame = new NetFrame((unsigned char *)&command, sizeof(command), NetType::XBAND_COMMAND, NetVertex::HAYSTACK);
+            network_frame->sendFrame(network_data);
+            delete network_frame;
+        }
+        ImGui::Separator();
+        ImGui::InputFloat("RX Sample Rate (MHz)", &global->rx_samp, 0, 0, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::InputFloat("RX LO (MHz)", &global->rx_lo, 0, 0, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::InputFloat("RX BW (MHz)", &global->rx_bw, 0, 0, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::InputText("RX Filter", rxphy->ftr_name, sizeof(rxphy->ftr_name), ImGuiInputTextFlags_AutoSelectAll);
+        ImGui::Combo("Mode##RX", (int *)&global->rxmode, mode_str, IM_ARRAYSIZE(mode_str));
+        if (ImGui::Button("Apply Configuration##RX"))
+        {
+            global->refresh_rx_ui_data = true;
+
+            if (global->rxmode)
+            {
+                rxphy->mode = global->rxmode;
+                rxphy->samp = MHZ(global->rx_samp);
+                rxphy->LO = MHZ(global->rx_lo);
+                rxphy->bw = MHZ(global->rx_bw);
+            }
+            else if (!global->rx_armed)
+                rxphy->mode = global->rxmode;
+
+            NetFrame *network_frame = new NetFrame((unsigned char *)&rxphy, sizeof(phy_config_t), NetType::XBAND_CONFIG, NetVertex::HAYSTACK);
+            network_frame->sendFrame(network_data);
+            delete network_frame;
+        }
+        if (ImGui::Button("Refresh RX Data"))
+        {
+            global->refresh_rx_ui_data = true;
+            // dbprintlf("RX UI marked for refresh.");
+        }
+
+        static int r_rx_i = 0;
+        static int r_rx_factor = 10;
+        if (global->refresh_rx_ui_data)
+        {
+            ImGui::SameLine();
+            r_rx_i = (r_rx_i + 1) % (5 * r_rx_factor);
+            ImGui::Text("%s", refreshing_icon[r_rx_i / r_rx_factor]);
+        }
+        else
+        {
+            if (r_rx_i)
+            {
+                r_rx_i = 0;
+            }
+        }
+
+        ImGui::Separator();
+        ImGui::Separator();
+
+        ImGui::Text("Transmitter Configuration");
+        ImGui::Columns(3, "xb_tx_sensors", true);
+        ImGui::Text("PLL Lock: %s", txphy->pll_lock ? "YES" : "NO ");
+        ImGui::NextColumn();
+        ImGui::Text("System Mode: %s", mode_str[txphy->mode]);
+        ImGui::NextColumn();
+        ImGui::Text("Temperature: %.3f °C", txphy->temp * 0.001);
+        ImGui::Columns(1);
+        ImGui::Separator();
+        ImGui::Columns(3, "xb_tx_freqs", true);
+        ImGui::Text("LO: %lld Hz", txphy->LO);
+        ImGui::NextColumn();
+        ImGui::Text("Samp: %lld Hz", txphy->bw);
+        ImGui::NextColumn();
+        ImGui::Text("BW: %lld Hz", txphy->samp);
+        ImGui::Columns(1);
+        ImGui::Separator();
+        ImGui::Combo("PLL Frequency##TX", &(txphy->pll_freq), pll_freq_str, IM_ARRAYSIZE(pll_freq_str));
+        if (ImGui::Button("Initialize PLL##TX") && global->xbtx_avail)
+        {
+            txphy->pll_lock = true;
+
+            XBAND_COMMAND command = XBC_INIT_PLL;
+            NetFrame *network_frame = new NetFrame((unsigned char *)&command, sizeof(command), NetType::XBAND_COMMAND, NetVertex::ROOFXBAND);
+            network_frame->sendFrame(network_data);
+            delete network_frame;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Disable PLL##TX"))
+        {
+            txphy->pll_lock = false;
+
+            XBAND_COMMAND command = XBC_DISABLE_PLL;
+            NetFrame *network_frame = new NetFrame((unsigned char *)&command, sizeof(command), NetType::XBAND_COMMAND, NetVertex::ROOFXBAND);
+            network_frame->sendFrame(network_data);
+            delete network_frame;
+        }
+        ImGui::Separator();
+        ImGui::InputFloat("TX Sample Rate (MHz)", &global->tx_samp, 0, 0, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::InputFloat("TX LO (MHz)", &global->tx_lo, 0, 0, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::InputFloat("TX BW (MHz)", &global->tx_bw, 0, 0, "%.3f", ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::InputText("TX Filter", txphy->ftr_name, sizeof(txphy->ftr_name), ImGuiInputTextFlags_AutoSelectAll);
+        ImGui::InputFloat("TX Gain", &global->tx_gain, 0, 0, "%.2f", ImGuiInputTextFlags_AutoSelectAll);
+        ImGui::Combo("Mode##TX", (int *)&global->txmode, mode_str, IM_ARRAYSIZE(mode_str));
+
+        if (ImGui::InputInt("MTU", &global->MTU, 0, 0, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue))
+        {
+            txphy->MTU = global->MTU;
+            // dbprintlf(RED_BG "UI: %u, txphy: %u", MTU, txphy->MTU);
+        }
+        if (ImGui::Button("Apply Configuration##TX"))
+        {
+            global->refresh_tx_ui_data = true;
+
+            if (global->txmode)
+            {
+                txphy->mode = global->txmode;
+                txphy->samp = MHZ(global->tx_samp);
+                txphy->LO = MHZ(global->tx_lo);
+                txphy->bw = MHZ(global->tx_bw);
+                txphy->gain = global->tx_gain;
+            }
+            else
+            {
+                txphy->mode = global->txmode;
+            }
+
+            // dbprintlf(RED_BG "Sending MTU of %u", txphy->MTU);
+
+            NetFrame *network_frame = new NetFrame((unsigned char *)&txphy, sizeof(phy_config_t), NetType::XBAND_CONFIG, NetVertex::ROOFXBAND);
+            network_frame->sendFrame(network_data);
+            delete network_frame;
+        }
+        if (ImGui::Button("Refresh TX Data"))
+        {
+            global->refresh_tx_ui_data = true;
+            // dbprintlf("TX UI marked for refresh.");
+        }
+
+        static int r_tx_i = 0;
+        static int r_tx_factor = 10;
+        if (global->refresh_tx_ui_data)
+        {
+            ImGui::SameLine();
+            r_tx_i = (r_tx_i + 1) % (5 * r_tx_factor);
+            ImGui::Text("%s", refreshing_icon[r_tx_i / r_tx_factor]);
+        }
+        else
+        {
+            if (r_tx_i)
+            {
+                r_tx_i = 0;
+            }
+        }
+
+        ImGui::Separator();
+        ImGui::Separator();
+        if (global->xbrx_avail && (rxphy->mode > 0) && !global->rx_armed)
+            ImGui::PushStyleColor(0, COLOR_GREEN);
+        else if (global->rx_armed)
+            ImGui::PushStyleColor(0, COLOR_YLW);
+        else
+            ImGui::PushStyleColor(0, COLOR_RED);
+        if (ImGui::Button("Arm Receiver") && global->xbrx_avail && (rxphy->mode > 0))
+        {
+            // TODO: The RX being armed should not be assumed; fill this value by polling for status!
+            global->rx_armed = true;
+
+            XBAND_COMMAND command = XBC_ARM_RX;
+            NetFrame *network_frame = new NetFrame((unsigned char *)&command, sizeof(command), NetType::XBAND_COMMAND, NetVertex::HAYSTACK);
+            network_frame->sendFrame(network_data);
+            delete network_frame;
+        }
+        ImGui::PopStyleColor();
+        if (global->rx_armed)
+            ImGui::PushStyleColor(0, COLOR_GREEN);
+        else
+            ImGui::PushStyleColor(0, COLOR_RED);
+        if (ImGui::Button("Disarm Receiver") && global->rx_armed)
+        {
+            // TODO: The RX being disarmed should not be assumed; fill this value by polling for status!
+            global->rx_armed = false;
+
+            XBAND_COMMAND command = XBC_DISARM_RX;
+            NetFrame *network_frame = new NetFrame((unsigned char *)&command, sizeof(command), NetType::XBAND_COMMAND, NetVertex::HAYSTACK);
+            network_frame->sendFrame(network_data);
+            delete network_frame;
+        }
+        ImGui::PopStyleColor();
+        if (global->xbtx_avail && (txphy->mode > 0))
+            ImGui::PushStyleColor(0, COLOR_GREEN);
+        else
+            ImGui::PushStyleColor(0, COLOR_RED);
+        if (ImGui::Button("Transmit Test Packet"))
+        {
+            global->last_xbread_status = -100;
+            global->last_xbrx_status = -100;
+
+            // Sends a test packet (ACS update) to SPACE-HAUC.
+
+            NetFrame *network_frame = new NetFrame((unsigned char *)test_cmd, sizeof(test_cmd), NetType::DATA, NetVertex::ROOFXBAND);
+            network_frame->sendFrame(network_data);
+            delete network_frame;
+        }
+        if (ImGui::Button("Transmit MEGA PACKET"))
+        {
+            global->last_xbread_status = -100;
+            global->last_xbrx_status = -100;
+
+            // NetFrame *network_frame = new NetFrame((unsigned char *)mega_packet, sizeof(mega_packet), NetType::DATA, NetVertex::ROOFXBAND);
+            // network_frame->sendFrame(network_data);
+            // delete network_frame;
+
+            char *buffer;
+
+            int fd = open("amontillado.txt", O_RDONLY);
+
+            if (fd > 2)
+            {
+                ssize_t size = global->mega_packet_file_size = (
+                    {
+                        struct stat s;
+                        fstat(fd, &s);
+                        s.st_size;
+                    });
+                // ssize_t size = mega_packet_file_size = sizeof(mega_packet);
+                ssize_t page_sz = sysconf(_SC_PAGESIZE);
+                ssize_t malloc_sz = page_sz * (size / page_sz) + (size % page_sz ? page_sz : 0);
+                buffer = (char *)malloc(malloc_sz);
+                ssize_t rd_sz = /*malloc_sz;*/ read(fd, buffer, size); // - 5924 works, -5923 does not
+                // memcpy(buffer, mega_packet, sizeof(mega_packet));
+                close(fd);
+                dbprintlf(GREEN_FG "MEGA PACKET: File size: %ld, malloc size: %ld, read: %ld", size, malloc_sz, rd_sz);
+                global->mega_packet_crc = internal_crc16((uint8_t *)buffer, rd_sz);
+
+                NetFrame *network_frame2 = new NetFrame((uint8_t *)buffer, rd_sz, NetType::DATA, NetVertex::ROOFXBAND);
+                dbprintlf(GREEN_FG "MEGA PACKET: Sent: %ld bytes", network_frame2->sendFrame(network_data));
+                free(buffer);
+
+                for (int i = 0; i < sizeof(NetFrameHeader); i++)
+                {
+                }
+
+                delete network_frame2;
+            }
+            else
+            {
+                dbprintlf(RED_FG "File pointer NULL.");
+            }
+        }
+        ImGui::PopStyleColor();
+
+        if (ImGui::Button("Clear Statuses"))
+        {
+            global->last_xbread_status = -100;
+            global->last_xbrx_status = -100;
+        }
+
+        if (global->last_xbread_status == -100)
+        {
+            snprintf(read_status_buffer, 256, "N/A");
+        }
+        else if (global->last_xbread_status > 0)
+        {
+            snprintf(read_status_buffer, 256, "Read %d bytes.", global->last_xbread_status);
+        }
+        else
+        {
+            snprintf(read_status_buffer, 256, "UNKNOWN STATUS: %d", global->last_xbread_status);
+        }
+
+        if (global->last_xbrx_status == -100)
+        {
+            snprintf(recv_status_buffer, 256, "N/A");
+        }
+        else if (global->last_xbrx_status > 0)
+        {
+            snprintf(recv_status_buffer, 256, "Received %d bytes.", global->last_xbrx_status);
+        }
+        else
+        {
+            switch (global->last_xbrx_status)
+            {
+            case RX_FRAME_INVALID:
+            {
+                snprintf(recv_status_buffer, 256, "RX_FRAME_INVALID (%d)", global->last_xbrx_status);
+                break;
+            }
+            case RX_INVALID_GUID:
+            {
+                snprintf(recv_status_buffer, 256, "RX_INVALID_GUID (%d)", global->last_xbrx_status);
+                break;
+            }
+            case RX_PACK_SZ_ZERO:
+            {
+                snprintf(recv_status_buffer, 256, "RX_PACK_SZ_ZERO (%d)", global->last_xbrx_status);
+                break;
+            }
+            case RX_NUM_FRAMES_ZERO:
+            {
+                snprintf(recv_status_buffer, 256, "RX_NUM_FRAMES_ZERO (%d)", global->last_xbrx_status);
+                break;
+            }
+            case RX_FRAME_SZ_ZERO:
+            {
+                snprintf(recv_status_buffer, 256, "RX_FRAME_SZ_ZERO (%d)", global->last_xbrx_status);
+                break;
+            }
+            case RX_THREAD_SPAWN:
+            {
+                snprintf(recv_status_buffer, 256, "RX_THREAD_SPAWN (%d)", global->last_xbrx_status);
+                break;
+            }
+            case RX_FRAME_CRC_FAILED:
+            {
+                snprintf(recv_status_buffer, 256, "RX_FRAME_CRC_FAILED (%d)", global->last_xbrx_status);
+                break;
+            }
+            case RX_MALLOC_FAILED:
+            {
+                snprintf(recv_status_buffer, 256, "RX_MALLOC_FAILED (%d)", global->last_xbrx_status);
+                break;
+            }
+            case -110:
+            {
+                snprintf(recv_status_buffer, 256, "Receiver timed out (DON'T PANIC!).", global->last_xbrx_status);
+                break;
+            }
+            case 0:
+            {
+                snprintf(recv_status_buffer, 256, "Receiver not armed, cannot receive.", global->last_xbrx_status);
+                break;
+            }
+            default:
+            {
+                snprintf(recv_status_buffer, 256, "UNKNOWN STATUS: %d", global->last_xbrx_status);
+                break;
+            }
+            }
+        }
+        ImGui::InputText("RX Status", recv_status_buffer, 256, ImGuiInputTextFlags_ReadOnly);
+        ImGui::InputText("Read Status", read_status_buffer, 256, ImGuiInputTextFlags_ReadOnly);
+    }
+    ImGui::End();
 }
 
 void gs_gui_xband_rx_window(global_data_t *global, bool *XBAND_RX_window, int access_level, bool allow_transmission)
 {
-
 }
 
 void gs_gui_xband_test_window(global_data_t *global, bool *XBAND_TEST_window, int access_level, bool allow_transmission)
 {
-
 }
 
 void gs_gui_sw_upd_window(global_data_t *global, bool *SW_UPD_window, int access_level, bool allow_transmission)
@@ -1254,7 +1707,7 @@ void gs_gui_sw_upd_window(global_data_t *global, bool *SW_UPD_window, int access
         ImGui::Text("Selected File");
         ImGui::Text("%s", upd_filename_buffer);
         ImGui::Text("In progress? %s", global->sw_updating ? "Yes" : "No");
-        
+
         if (global->sw_upd_total_packets != 0)
         {
             ImGui::ProgressBar((float)global->sw_upd_packet / (float)global->sw_upd_total_packets);
@@ -1298,7 +1751,7 @@ void gs_gui_sw_upd_window(global_data_t *global, bool *SW_UPD_window, int access
                 strcpy(global->directory, "sendables/");
                 snprintf(global->filename, 20, upd_filename_buffer);
 
-                pthread_create(&sw_upd_tid, NULL, gs_sw_send_file_thread, global);   
+                pthread_create(&sw_upd_tid, NULL, gs_sw_send_file_thread, global);
             }
         }
 
@@ -1495,6 +1948,7 @@ void gs_gui_rx_display_window(bool *RX_display, global_data_t *global)
         ImGui::Text("Roof UHF --------- %d", ((global->netstat & 0x40) == 0x40) ? 1 : 0);
         ImGui::Text("Roof X-Band ------ %d", ((global->netstat & 0x20) == 0x20) ? 1 : 0);
         ImGui::Text("Haystack --------- %d", ((global->netstat & 0x10) == 0x10) ? 1 : 0);
+        ImGui::Text("Track ------------ %d", ((global->netstat & 0x8) == 0x8) ? 1 : 0);
     }
     ImGui::End();
 }
@@ -1680,11 +2134,14 @@ void gs_gui_conns_manager_window(bool *CONNS_manager, int access_level, bool all
         ImGui::SameLine(125.0);
         ((global->netstat & 0x10) == 0x10) ? ImGui::TextColored(online, "ONLINE") : ImGui::TextColored(offline, "OFFLINE");
 
+        ImGui::Text("Track");
+        ImGui::SameLine(125.0);
+        ((global->netstat & 0x8) == 0x8) ? ImGui::TextColored(online, "ONLINE") : ImGui::TextColored(offline, "OFFLINE");
+
         if (network_data->connection_ready && network_data->socket > 0)
         {
             if (ImGui::Button("SEND TEST FRAME"))
             {
-                // gs_transmit(network_data, CS_TYPE_DATA, CS_ENDPOINT_CLIENT, NULL, 0);
                 NetFrame *network_frame = new NetFrame(NULL, 0, NetType::POLL, NetVertex::SERVER);
                 network_frame->sendFrame(network_data);
                 delete network_frame;

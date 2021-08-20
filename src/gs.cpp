@@ -28,122 +28,6 @@ void glfw_error_callback(int error, const char *description)
     fprintf(stderr, "GLFW error %d: %s\n", error, description);
 }
 
-// /**
-//  * @brief 
-//  * 
-//  * From:
-//  * https://github.com/sunipkmukherjee/comic-mon/blob/master/guimain.cpp
-//  * with minor modifications.
-//  * 
-//  * @param socket 
-//  * @param address 
-//  * @param socket_size 
-//  * @param tout_s 
-//  * @return int 
-//  */
-// int gs_connect(int socket, const struct sockaddr *address, socklen_t socket_size, int tout_s)
-// {
-//     int res;
-//     long arg;
-//     fd_set myset;
-//     struct timeval tv;
-//     int valopt;
-//     socklen_t lon;
-
-//     // Set non-blocking.
-//     if ((arg = fcntl(socket, F_GETFL, NULL)) < 0)
-//     {
-//         dbprintlf(RED_FG "Error fcntl(..., F_GETFL)");
-//         erprintlf(errno);
-//         return -1;
-//     }
-//     arg |= O_NONBLOCK;
-//     if (fcntl(socket, F_SETFL, arg) < 0)
-//     {
-//         dbprintlf(RED_FG "Error fcntl(..., F_SETFL)");
-//         erprintlf(errno);
-//         return -1;
-//     }
-
-//     // Trying to connect with timeout.
-//     res = connect(socket, address, socket_size);
-//     if (res < 0)
-//     {
-//         if (errno == EINPROGRESS)
-//         {
-//             dbprintlf(YELLOW_FG "EINPROGRESS in connect() - selecting");
-//             do
-//             {
-//                 if (tout_s > 0)
-//                 {
-//                     tv.tv_sec = tout_s;
-//                 }
-//                 else
-//                 {
-//                     tv.tv_sec = 1; // Minimum 1 second.
-//                 }
-//                 tv.tv_usec = 0;
-//                 FD_ZERO(&myset);
-//                 FD_SET(socket, &myset);
-//                 res = select(socket + 1, NULL, &myset, NULL, &tv);
-//                 if (res < 0 && errno != EINTR)
-//                 {
-//                     dbprintlf(RED_FG "Error connecting.");
-//                     erprintlf(errno);
-//                     return -1;
-//                 }
-//                 else if (res > 0)
-//                 {
-//                     // Socket selected for write.
-//                     lon = sizeof(int);
-//                     if (getsockopt(socket, SOL_SOCKET, SO_ERROR, (void *)(&valopt), &lon) < 0)
-//                     {
-//                         dbprintlf(RED_FG "Error in getsockopt()");
-//                         erprintlf(errno);
-//                         return -1;
-//                     }
-
-//                     // Check the value returned...
-//                     if (valopt)
-//                     {
-//                         dbprintlf(RED_FG "Error in delayed connection()");
-//                         erprintlf(valopt);
-//                         return -1;
-//                     }
-//                     break;
-//                 }
-//                 else
-//                 {
-//                     dbprintlf(RED_FG "Timeout in select(), cancelling!");
-//                     return -1;
-//                 }
-//             } while (1);
-//         }
-//         else
-//         {
-//             fprintf(stderr, "Error connecting %d - %s\n", errno, strerror(errno));
-//             dbprintlf(RED_FG "Error connecting.");
-//             erprintlf(errno);
-//             return -1;
-//         }
-//     }
-//     // Set to blocking mode again...
-//     if ((arg = fcntl(socket, F_GETFL, NULL)) < 0)
-//     {
-//         dbprintlf("Error fcntl(..., F_GETFL)");
-//         erprintlf(errno);
-//         return -1;
-//     }
-//     arg &= (~O_NONBLOCK);
-//     if (fcntl(socket, F_SETFL, arg) < 0)
-//     {
-//         dbprintlf("Error fcntl(..., F_GETFL)");
-//         erprintlf(errno);
-//         return -1;
-//     }
-//     return socket;
-// }
-
 float getMin(float a, float b)
 {
     if (a > b)
@@ -307,60 +191,20 @@ void *gs_acs_update_thread(void *global_data_vp)
     return NULL;
 }
 
-// int gs_transmit(NetworkData *network_data, NETWORK_FRAME_TYPE type, NETWORK_FRAME_ENDPOINT endpoint, void *data, int data_size)
-// {
-//     if (data_size < 0)
-//     {
-//         printf("Error: data_size is %d.\n", data_size);
-//         printf("Cancelling transmit.\n");
-//         return -1;
-//     }
-
-//     // Create a NetworkFrame to send our data in.
-//     NetworkFrame *clientserver_frame = new NetworkFrame(type, data_size);
-//     clientserver_frame->storePayload(endpoint, data, data_size);
-
-//     clientserver_frame->sendFrame(network_data);
-
-//     return 1;
-// }
-
-// void *gs_polling_thread(void *args)
-// {
-//     global_data_t *global_data = (global_data_t *)args;
-//     NetworkData *network_data = global_data->network_data;
-
-//     while (network_data->rx_active)
-//     {
-//         if (network_data->connection_ready)
-//         {
-//             NetworkFrame *null_frame = new NetworkFrame(CS_TYPE_NULL, 0x0);
-//             null_frame->storePayload(CS_ENDPOINT_SERVER, NULL, 0);
-
-//             // send(network_data->socket, null_frame, sizeof(NetworkFrame), 0);
-//             null_frame->sendFrame(network_data);
-//             delete null_frame;
-//         }
-
-//         usleep(SERVER_POLL_RATE SEC);
-//     }
-
-//     dbprintlf(FATAL "GS_POLLING_THREAD IS EXITING!");
-//     return NULL;
-// }
-
 // Updated, referenced "void *rcv_thr(void *sock)" from line 338 of: https://github.com/sunipkmukherjee/comic-mon/blob/master/guimain.cpp
 // Also see: https://github.com/mitbailey/socket_server
 void *gs_rx_thread(void *args)
 {
     // Convert the passed void pointer into something useful; in this case, global_data_t.
-    global_data_t *global_data = (global_data_t *)args;
-    NetDataClient *network_data = global_data->network_data;
+    global_data_t *global = (global_data_t *)args;
+    NetDataClient *network_data = global->network_data;
 
     while (network_data->recv_active && network_data->thread_status > 0)
     {
         if (!network_data->connection_ready)
         {
+            global->xbtx_avail = false;
+            global->xbrx_avail = false;
             sleep(5);
             continue;
         }
@@ -391,31 +235,35 @@ void *gs_rx_thread(void *args)
                     continue;
                 }
 
+                global->netstat = netframe->getNetstat();
+
+                (global->netstat & 0x20) == 0x20 ? global->xbtx_avail = true : global->xbtx_avail = false;
+                (global->netstat & 0x10) == 0x10 ? global->xbrx_avail = true : global->xbtx_avail = false;
+
                 // Based on what we got, set things to display the data.
                 switch (netframe->getType())
                 {
                 case NetType::POLL:
                 { // Will have status data.
                     dbprintlf("Received NULL frame.");
-                    // global_data->netstat = clientserver_frame->getNetstat();
                     break;
                 }
                 case NetType::ACK:
                 {
                     dbprintlf("Received ACK.");
-                    memcpy(global_data->cs_ack, payload, payload_size);
+                    memcpy(global->cs_ack, payload, payload_size);
                     break;
                 }
                 case NetType::NACK:
                 {
                     dbprintlf("Received N/ACK.");
-                    memcpy(global_data->cs_ack, payload, payload_size);
+                    memcpy(global->cs_ack, payload, payload_size);
 
                     if (((cs_ack_t *)payload)->code == NACK_NO_UHF)
                     {
                         // Immediately cancel all ongoing software updates, since the Roof UHF is complaining that it cannot use the UHF.
                         dbprintlf(RED_FG "Roof UHF responded saying that it cannot access UHF communications at this time. Halting all software updates.");
-                        global_data->sw_updating = false;
+                        global->sw_updating = false;
                     }
 
                     break;
@@ -423,31 +271,130 @@ void *gs_rx_thread(void *args)
                 case NetType::UHF_CONFIG:
                 {
                     dbprintlf("Received UHF Config.");
-                    memcpy(global_data->cs_config_uhf, payload, payload_size);
+                    memcpy(global->cs_config_uhf, payload, payload_size);
+                    break;
+                }
+                case NetType::XBAND_DATA:
+                {
+                    dbprintlf(BLUE_FG "Received a XBAND DATA frame!");
+
+                    phy_status_t *status = (phy_status_t *)payload;
+
+                    if (netframe->getOrigin() == NetVertex::HAYSTACK)
+                    {
+                        dbprintlf(BLUE_FG "Config frame is from HAYSTACK.");
+
+                        // Copies the status into rxphy because rxphy is used for UI display.
+                        // Copies only sizeof(phy_config_t) bytes, which copies over the status data not including the end-booleans.
+                        // TODO: Look into setting status' end booleans manually.
+                        // memcpy(rxphy, status, sizeof(phy_config_t));
+
+                        // Update always.
+                        global->rxphy->pll_lock = status->pll_lock;
+                        global->rxphy->mode = status->mode;
+                        global->rxphy->temp = status->temp;
+                        global->rxphy->rssi = status->rssi;
+                        memcpy(global->rxphy->curr_gainmode, status->curr_gainmode, 16);
+                        global->rxphy->LO = status->LO;
+                        global->rxphy->bw = status->bw;
+                        global->rxphy->samp = status->samp;
+                        global->rx_armed = status->rx_armed;
+                        global->last_xbrx_status = status->last_rx_status;
+                        global->last_xbread_status = status->last_read_status;
+
+                        // dbprintlf(RED_BG "%d \t %d", status->last_rx_status, last_xbrx_status);
+                        // dbprintlf(RED_BG "%d \t %d", status->last_read_status, last_xbread_status);
+
+                        if (global->refresh_rx_ui_data)
+                        { // Only update when asked.
+                            global->rx_samp = HZ_M(status->samp);
+                            global->rx_lo = HZ_M(status->LO);
+                            global->rx_bw = HZ_M(status->bw);
+                            memcpy(global->rxphy->ftr_name, status->ftr_name, 64);
+                            global->rxmode = status->mode;
+
+                            global->refresh_rx_ui_data = false;
+                        }
+                    }
+                    else
+                    {
+                        dbprintlf(BLUE_FG "Config frame is from ROOF XBAND.");
+
+                        // Copies the status into rxphy because rxphy is used for UI display.
+                        // Copies only sizeof(phy_config_t) bytes, which copies over the status data not including the end-booleans.
+                        // TODO: Look into setting status' end booleans manually.
+                        // memcpy(txphy, status, sizeof(phy_config_t));
+
+                        // Update always.
+                        global->txphy->pll_lock = status->pll_lock;
+                        global->txphy->mode = status->mode;
+                        global->txphy->temp = status->temp;
+                        global->txphy->LO = status->LO;
+                        global->txphy->bw = status->bw;
+                        global->txphy->samp = status->samp;
+
+                        if (global->refresh_tx_ui_data)
+                        { // Only update when asked.
+                            dbprintf(RED_BG "Setting refresh TX (%d) to false ", global->refresh_tx_ui_data);
+                            global->tx_samp = HZ_M(status->samp);
+                            global->tx_lo = HZ_M(status->LO);
+                            global->tx_bw = HZ_M(status->bw);
+                            memcpy(global->txphy->ftr_name, status->ftr_name, 64);
+                            global->txmode = status->mode;
+                            global->tx_gain = status->gain;
+                            // dbprintlf(RED_BG "Received MTU status: %d", status->MTU);
+                            global->txphy->MTU = status->MTU;
+                            global->MTU = status->MTU;
+
+                            global->refresh_tx_ui_data = false;
+                            printf(RED_BG "(%d)." RESET_ALL "\n", global->refresh_tx_ui_data);
+                        }
+                    }
+
                     break;
                 }
                 case NetType::XBAND_CONFIG:
                 {
                     dbprintlf("Received X-Band Config.");
-                    memcpy(global_data->cs_config_xband, payload, payload_size);
+                    memcpy(global->cs_config_xband, payload, payload_size);
                     break;
                 }
                 case NetType::DATA: // Data type is just cmd_output_t (SH->GS)
                 {
-                    // ASSERTION: All 'DATA'-type frame payloads incoming to the client is in the form of a from-SPACE-HAUC cmd_output_t.
 
-                    if (((cmd_output_t *)payload)->mod == SW_UPD_ID)
+                    dbprintlf(BLUE_FG "Received a DATA frame!");
+
+                    if (netframe->getOrigin() == NetVertex::HAYSTACK)
+                    {
+                        dbprintlf(BLUE_FG "DATA frame from HAYSTACK.");
+                        if (memcmp(test_cmd, payload, sizeof(test_cmd)) == 0)
+                        {
+                            dbprintlf(GREEN_FG "DATA frame is identical to previously sent small test frame.");
+                        }
+                        else
+                        {
+                            if (global->mega_packet_crc == internal_crc16(payload, global->mega_packet_file_size + 1))
+                            {
+                                dbprintlf(GREEN_FG "DATA frame is identical to previously sent MEGA PACKET.");
+                            }
+                            else
+                            {
+                                dbprintlf(RED_FG "DATA frame is not identical to previously sent test frame.");
+                            }
+                        }
+                    }
+                    else if (((cmd_output_t *)payload)->mod == SW_UPD_ID)
                     { // If this is part of an sw_update...
                         // If we can't get the lock, only wait for one second.
                         struct timespec timeout;
                         clock_gettime(CLOCK_REALTIME, &timeout);
                         timeout.tv_sec += 1;
 
-                        if (pthread_mutex_timedlock(global_data->sw_output_lock, &timeout) == 0)
+                        if (pthread_mutex_timedlock(global->sw_output_lock, &timeout) == 0)
                         {
-                            memcpy(global_data->sw_output, payload, payload_size);
-                            global_data->sw_output_fresh = true;
-                            pthread_mutex_unlock(global_data->sw_output_lock);
+                            memcpy(global->sw_output, payload, payload_size);
+                            global->sw_output_fresh = true;
+                            pthread_mutex_unlock(global->sw_output_lock);
                         }
                         else
                         {
@@ -456,11 +403,11 @@ void *gs_rx_thread(void *args)
                     }
                     else if (((cmd_output_t *)payload)->mod != ACS_UPD_ID)
                     { // If this is not an ACS Update...
-                        memcpy(global_data->cmd_output, payload, payload_size);
+                        memcpy(global->cmd_output, payload, payload_size);
                     }
                     else
                     { // If it is an ACS update...
-                        global_data->acs_rolbuf->addValueSet(*((acs_upd_output_t *)payload));
+                        global->acs_rolbuf->addValueSet(*((acs_upd_output_t *)payload));
                     }
                     break;
                 }
@@ -477,7 +424,6 @@ void *gs_rx_thread(void *args)
             }
 
             delete netframe;
-
         }
         if (read_size == -404)
         {
@@ -498,6 +444,14 @@ void *gs_rx_thread(void *args)
 
     network_data->recv_active = false;
     dbprintlf(FATAL "DANGER! RECEIVE THREAD IS RETURNING!");
+
+    global->xbtx_avail = false;
+    global->xbrx_avail = false;
+
+    if (global->network_data->thread_status > 0)
+    {
+        global->network_data->thread_status = 0;
+    }
     return NULL;
 }
 
@@ -737,7 +691,7 @@ void *gs_sw_send_file_thread(void *args)
                 memcpy(wr_buf, dt_hdr, sizeof(sw_upd_data_t));
 
                 // retval = gs_transmit(global->network_data, CS_TYPE_DATA, CS_ENDPOINT_ROOFUHF, wr_buf, SW_UPD_PACKET_SIZE);
-                NetFrame *network_frame = new NetFrame((unsigned char *)wr_buf,  SW_UPD_PACKET_SIZE, NetType::DATA, NetVertex::ROOFUHF);
+                NetFrame *network_frame = new NetFrame((unsigned char *)wr_buf, SW_UPD_PACKET_SIZE, NetType::DATA, NetVertex::ROOFUHF);
                 network_frame->sendFrame(global->network_data);
                 delete network_frame;
 
@@ -873,7 +827,7 @@ void *gs_sw_send_file_thread(void *args)
             checksum_md5(directory_filename, cf_hdr->hash, 32);
 
             // retval = gs_transmit(global->network_data, CS_TYPE_DATA, CS_ENDPOINT_ROOFUHF, wr_buf, SW_UPD_PACKET_SIZE);
-            NetFrame *network_frame = new NetFrame((unsigned char *)wr_buf,  SW_UPD_PACKET_SIZE, NetType::DATA, NetVertex::ROOFUHF);
+            NetFrame *network_frame = new NetFrame((unsigned char *)wr_buf, SW_UPD_PACKET_SIZE, NetType::DATA, NetVertex::ROOFUHF);
             network_frame->sendFrame(global->network_data);
             delete network_frame;
 
