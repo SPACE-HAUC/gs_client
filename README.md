@@ -2,15 +2,17 @@
 Graphical user interface for SPACE-HAUC Ground Station operations. Intended to be used with the SPACE-HAUC Ground Station Network.
 
 ## The Network
-[GUI Client](https://github.com/mitbailey/ground_station) (ground_station)
+[GUI Client](https://github.com/SPACE-HAUC/gs_client) (SPACE-HAUC/gs_client)
 
-[Server](https://github.com/mitbailey/ground_station_server) (ground_station_server)
+[Server](https://github.com/SPACE-HAUC/gs_server) (SPACE-HAUC/gs_server)
 
-[Roof UHF](https://github.com/mitbailey/ground_station_uhf) (ground_station_uhf)
+[Roof UHF](https://github.com/SPACE-HAUC/gs_uhf) (SPACE-HAUC/gs_uhf)
 
-[Roof X-Band](https://github.com/mitbailey/ground_station_xband) (ground_station_xband)
+[Roof X-Band](https://github.com/SPACE-HAUC/gs_xband) (SPACE-HAUC/gs_xband)
 
-[Haystack](https://github.com/mitbailey/ground_station_haystack) (ground_station_haystack)
+[Haystack](https://github.com/SPACE-HAUC/gs_haystack) (SPACE-HAUC/gs_haystack)
+
+[Tracker](https://github.com/SPACE-HAUC/gs_track) (SPACE-HAUC/gs_track)
   
 ## Current State
 _GUI Client_ (beta, tested)
