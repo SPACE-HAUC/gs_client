@@ -1247,7 +1247,7 @@ void gs_gui_xband_tx_window(global_data_t *global, bool *XBAND_TX_window, int ac
         global->refresh_tx_ui_data = true;
         first_pass = false;
     }
-    
+
     if (ImGui::Begin("Rooftop X-Band Configuration", NULL))
     {
         if (!global->xbtx_avail)
@@ -1396,7 +1396,7 @@ void gs_gui_xband_rx_window(global_data_t *global, bool *XBAND_RX_window, int ac
         global->refresh_rx_ui_data = true;
         first_pass = false;
     }
-    
+
     if (ImGui::Begin("Haystack X-Band Configuration", NULL))
     {
         if (!global->xbrx_avail)
@@ -1533,7 +1533,7 @@ void gs_gui_xband_test_window(global_data_t *global, bool *XBAND_TEST_window, in
     phy_config_t *txphy = global->txphy;
 
     static char *mode_str[] = {"sleep", "fdd  ", "tdd  "};
-    
+
     if (ImGui::Begin("Ground Station X-Band Testing", NULL))
     {
         if (global->xbrx_avail && (rxphy->mode > 0) && !global->rx_armed)
@@ -1729,33 +1729,23 @@ void gs_gui_sw_upd_window(global_data_t *global, bool *SW_UPD_window, int access
 {
     // TODO: Make this work, currently this has little to no functionality.
 
-    ImGuiInputTextFlags_ flag = (ImGuiInputTextFlags_)0;
-    static cmd_input_t UPD_command_input = {.mod = INVALID_ID, .cmd = INVALID_ID, .unused = 0, .data_size = 0};
+    // How does software update work?
+    // 1. Choose the file to send.
+    // 2. Stage the update by sending it to the UHF radio.
+    // 3. Initiate the update by sending a command to the UHF radio.
+    // 4. Receive update status information from the UHF radio.
+
     static char upd_filename_buffer[SW_UPD_FN_SIZE] = {0};
+    static char queued_upd_filename_buffer[SW_UPD_FN_SIZE] = {0};
 
-    if (ImGui::Begin("Software Updater Control Panel", SW_UPD_window, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_HorizontalScrollbar))
+    static bool first_pass = true;
+    static bool unstage = false;
+
+    // FOR DEBUG PURPOSES ONLY
+    static double starttime = 0;
+
+    if (ImGui::Begin("Software Update Control Panel", SW_UPD_window, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_HorizontalScrollbar))
     {
-        // Needs buttons. Values are just #defines and magic values
-
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "WARNING: NOT YET IMPLEMENTED");
-
-        ImGui::Text("Name of the file to send:");
-        ImGui::InputTextWithHint("", "Name of File", upd_filename_buffer, 256, ImGuiInputTextFlags_EnterReturnsTrue);
-
-        // NOTE: Queued file name not sent with software update command, needs to be here to select what file to send.
-        ImGui::Text("Queued file name: %s", upd_filename_buffer);
-
-        ImGui::Text("Selected File");
-        ImGui::Text("%s", upd_filename_buffer);
-        ImGui::Text("In progress? %s", global->sw_updating ? "Yes" : "No");
-
-        if (global->sw_upd_total_packets != 0)
-        {
-            ImGui::ProgressBar((float)global->sw_upd_packet / (float)global->sw_upd_total_packets);
-        }
-
-        ImGui::Separator();
-
         if (access_level <= 2)
         {
             ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "ACCESS DENIED");
@@ -1768,32 +1758,154 @@ void gs_gui_sw_upd_window(global_data_t *global, bool *SW_UPD_window, int access
             ImGui::PushStyleColor(0, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
         }
 
-        if (global->sw_updating)
-        {
-            if (ImGui::Button("ABORT UPDATE") && access_level > 2 && allow_transmission)
-            {
-                global->sw_updating = false;
-            }
+        ImGui::Text("How does software update work?");
+        ImGui::Text("1. Choose the file to send.");
+        ImGui::Text("2. Stage the update by sending it to the UHF radio.");
+        ImGui::Text("3. Initiate the update by sending a command to the UHF radio.");
+        ImGui::Text("4. Receive update status information from the UHF radio.");
 
-            if (!global->network_data->connection_ready)
+        if (ImGui::InputTextWithHint("##filename", "Name of File", upd_filename_buffer, SW_UPD_FN_SIZE, ImGuiInputTextFlags_EnterReturnsTrue))
+        {
+            memcpy(queued_upd_filename_buffer, upd_filename_buffer, SW_UPD_FN_SIZE);
+            if (first_pass)
             {
-                dbprintf(FATAL "Update canceled due to loss of connection with server!");
-                global->sw_updating = false;
+                first_pass = false;
             }
+        }
+        ImGui::Text("Queued file name: %s", queued_upd_filename_buffer);
+
+        if (access(queued_upd_filename_buffer, F_OK) == 0)
+        {
+            // file exists
+
+            // From: https://github.com/SPACE-HAUC/sw_update/blob/master/include/sw_update_packdef.h
+            // Used to determine sw_update data transfer size as 48 bytes / packet.
+            // #define PACKET_SIZE 64
+            // #define SW_UPD_EOF 0xaa
+            //             typedef struct __attribute__((packed))
+            //             {
+            //                 int guid;
+            //                 int packet_number;
+            //                 int total_bytes;
+            //                 uint8_t data_size;
+            //             } sw_upd_data_t;
+            // #define DATA_SIZE_MAX (PACKET_SIZE - sizeof(sw_upd_data_t) - sizeof(sw_upd_eof))
+
+            // From: https://github.com/SPACE-HAUC/shflight/blob/flight_test/src/sw_update_sh.c
+            // max_packets = (file_size / DATA_SIZE_MAX) + ((file_size % DATA_SIZE_MAX) > 0);
+
+            // ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "FILE EXISTS");
+            global->sw_upd_queued = true;
+            global->sw_upd_total_packets = (
+                {
+                    int fd = open(queued_upd_filename_buffer, O_RDONLY);
+                    struct stat s;
+                    fstat(fd, &s);
+                    close(fd);
+                    (s.st_size / 48) + ((s.st_size % 48) > 0);
+                });
         }
         else
         {
-            if (ImGui::Button("BEGIN UPDATE") && access_level > 2 && allow_transmission)
+            // file doesn't exist
+            if (!first_pass)
             {
-                global->sw_updating = true;
-
-                static pthread_t sw_upd_tid;
-
-                strcpy(global->directory, "sendables/");
-                snprintf(global->filename, 20, upd_filename_buffer);
-
-                pthread_create(&sw_upd_tid, NULL, gs_sw_send_file_thread, global);
+                ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "FILE \"%s\" DOES NOT EXIST", queued_upd_filename_buffer);
             }
+            global->sw_upd_queued = false;
+        }
+
+        if (!global->sw_upd_queued)
+        {
+            ImGui::PushStyleColor(0, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+        }
+        if (ImGui::Button("STAGE") && global->sw_upd_queued && access_level > 2 && allow_transmission)
+        {
+            // TODO: Send file to gs_uhf.
+            // TODO: Confirm gs_uhf received the file intact.
+            
+            int fd = open(queued_upd_filename_buffer, O_RDONLY);
+            struct stat s;
+            fstat(fd, &s);
+            int file_size = s.st_size;
+            if (file_size > 0)
+            {
+                int stage_file_buffer_size = file_size + sizeof(sw_update_info_t);
+                char *stage_file_buffer = (char *)malloc(stage_file_buffer_size);
+                memset(stage_file_buffer, 0x0, stage_file_buffer_size);
+
+                sw_update_info_t info[1] = {0};
+                info->stage = 1;
+                strcpy(info->filename, queued_upd_filename_buffer);
+                memcpy(stage_file_buffer, info, sizeof(sw_update_info_t));
+
+                read(fd, stage_file_buffer + sizeof(sw_update_info_t), file_size);
+
+                NetFrame *netframe = new NetFrame((unsigned char *)stage_file_buffer, file_size + sizeof(sw_update_info_t), NetType::SW_UPDATE, NetVertex::ROOFUHF);
+                netframe->sendFrame(global->network_data);
+                delete netframe;
+
+                free(stage_file_buffer);
+
+                global->sw_upd_staged = true;
+                global->sw_upd_packet = 0;
+            }
+            else
+            {
+                dbprintlf(RED_FG "File size equal to or less than zero.");
+            }
+        }
+        if (!global->sw_upd_queued)
+        {
+            ImGui::PopStyleColor();
+        }
+
+        ImGui::SameLine();
+
+        if (!global->sw_upd_staged)
+        {
+            ImGui::PushStyleColor(0, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+        }
+        if (ImGui::Button("BEGIN") && global->sw_upd_staged && access_level > 2 && allow_transmission)
+        {
+            // TODO: Send a start-update command to gs_uhf.
+
+            sw_update_info_t info[1] = {0};
+
+            info->begin = 1;
+            strcpy(info->filename, queued_upd_filename_buffer);
+
+            NetFrame *netframe = new NetFrame((unsigned char *)info, sizeof(sw_update_info_t), NetType::SW_UPDATE, NetVertex::ROOFUHF);
+            netframe->sendFrame(global->network_data);
+            delete netframe;
+
+            unstage = true;
+            global->sw_upd_in_progress = true;
+
+            // FOR DEBUG PURPOSES ONLY
+            starttime = ImGui::GetTime() + 1;
+        }
+        if (!global->sw_upd_staged)
+        {
+            ImGui::PopStyleColor();
+        }
+        if (unstage)
+        {
+            global->sw_upd_staged = false;
+            unstage = false;
+        }
+
+        ImGui::SameLine();
+        ImGui::Text("%d / %d Packets", global->sw_upd_packet, global->sw_upd_total_packets);
+
+        if (global->sw_upd_in_progress && global->sw_upd_packet <= global->sw_upd_total_packets)
+        {
+            // FOR DEBUG PURPOSES ONLY
+            global->sw_upd_packet++;
+        }
+        else if (global->sw_upd_in_progress)
+        {
+            global->sw_upd_in_progress = !global->sw_upd_in_progress;
         }
 
         if (!allow_transmission)
@@ -1807,6 +1919,8 @@ void gs_gui_sw_upd_window(global_data_t *global, bool *SW_UPD_window, int access
         }
     }
     ImGui::End();
+
+    return;
 }
 
 void gs_gui_sys_ctrl_window(NetDataClient *network_data, bool *SYS_CTRL_window, int access_level, bool allow_transmission)
@@ -2453,7 +2567,7 @@ void gs_gui_gsio_control_panel_window(bool *GSIO_control_panel, bool *XBAND_TX_w
         ImGui::Checkbox("X-Band RX (Haystack) Config", XBAND_RX_window);
         ImGui::Checkbox("X-Band Test Panel", XBAND_TEST_window);
     }
-    ImGui::End();  
+    ImGui::End();
 }
 
 void gs_gui_user_manual_window(bool *User_Manual)

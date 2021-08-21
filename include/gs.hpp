@@ -53,6 +53,14 @@
 // Data value for software update command, replaces .data[] values.
 #define SW_UPD_VALID_MAGIC 0x2489f750228d2e4fL
 
+#define SW_UPD_FN_SIZE 20
+
+enum SW_UPD_NACK_CODES
+{
+    SW_NACK_NO_UHF,
+    SW_NACK_
+};
+
 /**
  * @brief Numeric identifiers for determining what module a command is for.
  * 
@@ -440,6 +448,21 @@ typedef struct
     bool tooltips;
 } settings_t;
 
+// Sent between GUI Client and UHF.
+typedef struct __attribute__((packed))
+{
+    // From UHF Only
+    uint32_t current_packet;
+    uint32_t total_packets;
+    uint8_t in_progress;    // Boolean
+    uint8_t finished;       // Boolean
+
+    // To UHF Only
+    uint8_t stage;          // If 1, UHF will look for the file in the frame payload after this struct.
+    uint8_t begin;          // If 1, UHF will begin the software update process.
+    char filename[20];
+} sw_update_info_t;
+
 /**
  * @brief Contains structures and classes that will be populated with data by the receive thread; these structures and classes also provide the data which the client will display.
  * 
@@ -461,14 +484,18 @@ typedef struct
     double last_contact;
 
     // sw_update
-    cmd_output_t sw_output[1];
-    pthread_mutex_t sw_output_lock[1];
-    bool sw_output_fresh;
-    bool sw_updating;
+    // cmd_output_t sw_output[1];
+    // pthread_mutex_t sw_output_lock[1];
+    // bool sw_output_fresh;
+    // bool sw_updating;
     int sw_upd_packet;        // Current packet number for GUI loading bar.
     int sw_upd_total_packets; // Total packets for the transfer.
-    char directory[20];
-    char filename[20];
+    // char directory[20];
+    char filename[SW_UPD_FN_SIZE];
+
+    bool sw_upd_queued;
+    bool sw_upd_staged;
+    bool sw_upd_in_progress;
 
     // x-band
     bool xbrx_avail; // Is HAYSTACK connected?
@@ -616,31 +643,31 @@ void *gs_acs_update_thread(void *vp);
  */
 void *gs_rx_thread(void *args);
 
-/**
- * @brief 
- * 
- * @param args_vp 
- * @return void* 
- */
-void *gs_sw_send_file_thread(void *args_vp);
+// /**
+//  * @brief 
+//  * 
+//  * @param args_vp 
+//  * @return void* 
+//  */
+// void *gs_sw_send_file_thread(void *args_vp);
 // int gs_sw_send_file(global_data_t *global_data, const char directory[], const char filename[], bool *done_upld);
 
-/**
- * @brief 
- * 
- * @param filename 
- * @return ssize_t 
- */
-ssize_t gs_sw_get_sent_bytes(const char filename[]);
+// /**
+//  * @brief 
+//  * 
+//  * @param filename 
+//  * @return ssize_t 
+//  */
+// ssize_t gs_sw_get_sent_bytes(const char filename[]);
 
-/**
- * @brief 
- * 
- * @param filename 
- * @param sent_bytes 
- * @return int 
- */
-int gs_sw_set_sent_bytes(const char filename[], ssize_t sent_bytes);
+// /**
+//  * @brief 
+//  * 
+//  * @param filename 
+//  * @param sent_bytes 
+//  * @return int 
+//  */
+// int gs_sw_set_sent_bytes(const char filename[], ssize_t sent_bytes);
 
 /**
  * @brief Generates a 16-bit CRC for the given data.

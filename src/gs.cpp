@@ -252,6 +252,7 @@ void *gs_rx_thread(void *args)
                 {
                     dbprintlf("Received ACK.");
                     memcpy(global->cs_ack, payload, payload_size);
+
                     break;
                 }
                 case NetType::NACK:
@@ -263,7 +264,7 @@ void *gs_rx_thread(void *args)
                     {
                         // Immediately cancel all ongoing software updates, since the Roof UHF is complaining that it cannot use the UHF.
                         dbprintlf(RED_FG "Roof UHF responded saying that it cannot access UHF communications at this time. Halting all software updates.");
-                        global->sw_updating = false;
+                        global->sw_upd_in_progress = false;
                     }
 
                     break;
@@ -359,6 +360,27 @@ void *gs_rx_thread(void *args)
                     memcpy(global->cs_config_xband, payload, payload_size);
                     break;
                 }
+                case NetType::SW_UPDATE:
+                {
+                    dbprintlf("Received SW_UPDATE information.");
+
+                    // sw_update_info_t
+                    sw_update_info_t *info = (sw_update_info_t *)payload;
+
+                    global->sw_upd_packet = info->current_packet;
+                    if (global->sw_upd_total_packets != info->total_packets)
+                    {
+                        dbprintlf(RED_BG "UHF thinks the total packets for the current transfer is %d vs our %d!", info->total_packets, global->sw_upd_total_packets);
+                    }
+                    
+                    if (info->finished)
+                    {
+                        dbprintlf(BLUE_BG "UHF reports finishing software update.");
+                        global->sw_upd_in_progress = false;
+                    }
+
+                    break;
+                }
                 case NetType::DATA: // Data type is just cmd_output_t (SH->GS)
                 {
 
@@ -383,24 +405,24 @@ void *gs_rx_thread(void *args)
                             }
                         }
                     }
-                    else if (((cmd_output_t *)payload)->mod == SW_UPD_ID)
-                    { // If this is part of an sw_update...
-                        // If we can't get the lock, only wait for one second.
-                        struct timespec timeout;
-                        clock_gettime(CLOCK_REALTIME, &timeout);
-                        timeout.tv_sec += 1;
+                    // else if (((cmd_output_t *)payload)->mod == SW_UPD_ID)
+                    // { // If this is part of an sw_update...
+                    //     // If we can't get the lock, only wait for one second.
+                    //     struct timespec timeout;
+                    //     clock_gettime(CLOCK_REALTIME, &timeout);
+                    //     timeout.tv_sec += 1;
 
-                        if (pthread_mutex_timedlock(global->sw_output_lock, &timeout) == 0)
-                        {
-                            memcpy(global->sw_output, payload, payload_size);
-                            global->sw_output_fresh = true;
-                            pthread_mutex_unlock(global->sw_output_lock);
-                        }
-                        else
-                        {
-                            dbprintlf(RED_FG "Failed to acquire sw_data_lock.");
-                        }
-                    }
+                    //     if (pthread_mutex_timedlock(global->sw_output_lock, &timeout) == 0)
+                    //     {
+                    //         memcpy(global->sw_output, payload, payload_size);
+                    //         global->sw_output_fresh = true;
+                    //         pthread_mutex_unlock(global->sw_output_lock);
+                    //     }
+                    //     else
+                    //     {
+                    //         dbprintlf(RED_FG "Failed to acquire sw_data_lock.");
+                    //     }
+                    // }
                     else if (((cmd_output_t *)payload)->mod != ACS_UPD_ID)
                     { // If this is not an ACS Update...
                         memcpy(global->cmd_output, payload, payload_size);
@@ -453,566 +475,4 @@ void *gs_rx_thread(void *args)
         global->network_data->thread_status = 0;
     }
     return NULL;
-}
-
-// TODO: Make this into a thread so that the rest of the program will continue running.
-// NOTE: The RX thread copies all SW-related data into global_data->sw_output and sets the new_sw_data flag.
-void *gs_sw_send_file_thread(void *args)
-{
-    global_data_t *global = (global_data_t *)args;
-    dbprintlf("Checkpoint 1.");
-    char directory[20];
-    snprintf(directory, 20, global->directory);
-    dbprintlf("Checkpoint 2.");
-    char filename[20];
-    snprintf(filename, 20, global->filename);
-    dbprintlf("Checkpoint 3.");
-
-    // int gs_sw_send_file(global_data_t *global_data, const char directory[], const char filename[], bool *done_upld)
-    // {
-    if (!global->network_data->connection_ready)
-    {
-        dbprintlf("Checkpoint 4.");
-        dbprintlf(RED_FG "Connection is not ready: update aborted.");
-        global->sw_updating = false;
-        return NULL;
-    }
-    if (filename == NULL)
-    {
-        dbprintlf("Checkpoint 4.");
-        dbprintlf(RED_FG "File name not supplied.");
-        global->sw_updating = false;
-        return NULL;
-    }
-    else if (strlen(filename) >= SW_UPD_FN_SIZE)
-    {
-        dbprintlf("Checkpoint 4.");
-        dbprintlf(RED_FG "File name too long.");
-        global->sw_updating = false;
-        return NULL;
-    }
-    dbprintlf("Checkpoint 4.");
-    char directory_filename[SW_UPD_FN_SIZE + 32];
-    snprintf(directory_filename, sizeof(directory_filename), "%s%s", directory, filename);
-    FILE *bin_fp = fopen(directory_filename, "rb");
-
-    if (bin_fp == NULL)
-    {
-        dbprintlf(RED_FG "Could not open %s.", directory_filename);
-        global->sw_updating = false;
-        return NULL;
-    }
-
-    // Find the size of the binary file.
-    fseek(bin_fp, 0, SEEK_END);
-    ssize_t file_size = ftell(bin_fp);
-    fseek(bin_fp, 0, SEEK_SET);
-
-    dbprintlf("Beginning send of %s (%d bytes).", directory_filename, file_size);
-
-    ssize_t sent_bytes = gs_sw_get_sent_bytes(filename);
-
-    if (sent_bytes < 0)
-    {
-        dbprintlf(RED_FG "Failed to retrieve sent bytes for %s (%d).", directory_filename, sent_bytes);
-        global->sw_updating = false;
-        return NULL;
-    }
-
-    volatile int sent_packets = (sent_bytes / SW_UPD_DATA_SIZE_MAX) + ((sent_bytes % SW_UPD_DATA_SIZE_MAX) > 0);
-    ssize_t fn_sz = strlen(filename) + 1;
-    int send_attempts = 0;
-    int max_packets = (file_size / SW_UPD_DATA_SIZE_MAX) + ((file_size % SW_UPD_DATA_SIZE_MAX) > 0);
-    ssize_t retval = 0;
-
-    // Out initial state is to begin by sending primers until we get a good reply.
-    sw_upd_mode mode = primer;
-
-    // Primers, headers, and buffers.
-    char rd_buf[SW_UPD_PACKET_SIZE];
-    char wr_buf[SW_UPD_PACKET_SIZE];
-
-    dbprintlf("Entering file transfer phase.");
-
-    // Outer loop. Runs until we have sent the entire file.
-    while ((mode != finish) && global->sw_updating)
-    {
-        // Each loop we should set sent_bytes and sent_packets.
-        sent_bytes = gs_sw_get_sent_bytes(filename);
-        sent_packets = (sent_bytes / SW_UPD_DATA_SIZE_MAX) + ((sent_bytes % SW_UPD_DATA_SIZE_MAX) > 0);
-        global->sw_upd_packet = sent_packets;
-
-        ssize_t in_sz = 0;
-
-        // Remember to clean your memory and drink your Ovaltine.
-        memset(wr_buf, 0x0, SW_UPD_PACKET_SIZE);
-
-        switch (mode)
-        {
-        case primer:
-        {
-            sw_upd_startresume_t *sr_pmr = (sw_upd_startresume_t *)wr_buf;
-            sw_upd_startresume_reply_t *sr_rep = (sw_upd_startresume_reply_t *)rd_buf;
-
-            sr_pmr->cmd = SW_UPD_SRID;
-            strcpy(sr_pmr->filename, filename);
-            sr_pmr->fid = 1;
-            sr_pmr->sent_bytes = sent_bytes;
-            sr_pmr->total_bytes = file_size;
-
-            // Send the START/RESUME primer, and get back a reply
-            for (send_attempts = 0; (send_attempts < SW_UPD_MAX_SEND_ATTEMPTS) && global->sw_updating; send_attempts++)
-            {
-                dbprintlf("Sending S/R primer.");
-
-                // retval = gs_transmit(global->network_data, CS_TYPE_DATA, CS_ENDPOINT_ROOFUHF, wr_buf, SW_UPD_PACKET_SIZE);
-                NetFrame *network_frame = new NetFrame((unsigned char *)wr_buf, SW_UPD_PACKET_SIZE, NetType::DATA, NetVertex::ROOFUHF);
-                network_frame->sendFrame(global->network_data);
-                delete network_frame;
-
-                if (retval <= 0)
-                {
-                    dbprintlf(RED_FG "S/R primer writing failed (%d).", retval);
-                    continue;
-                }
-
-                dbprintlf("Will await N/ACK.");
-                memset(rd_buf, 0x0, SW_UPD_PACKET_SIZE);
-
-                // TODO: Figure out a better way to wait for new data.
-                while (!global->sw_output_fresh && global->sw_updating)
-                {
-                    dbprintlf("Waiting for response...");
-                    usleep(0.1 SEC);
-                }
-                if (!global->sw_updating)
-                {
-                    // Update aborted.
-                    dbprintlf(YELLOW_FG "Update aborted.");
-                    return NULL;
-                }
-
-                // Timeout after waiting for 15 seconds.
-                struct timespec timeout;
-                clock_gettime(CLOCK_REALTIME, &timeout);
-                timeout.tv_sec += 15;
-
-                int retval = pthread_mutex_timedlock(global->sw_output_lock, &timeout);
-
-                if (retval == 0)
-                {
-                    memcpy(rd_buf, global->sw_output->data, global->sw_output->data_size);
-                    global->sw_output_fresh = false;
-                    pthread_mutex_unlock(global->sw_output_lock);
-                }
-                else if (retval == ETIMEDOUT)
-                {
-                    // NOTE: Continues if timeout.
-                    dbprintlf(YELLOW_FG "Lock acquisition timed out: failed to receive a response from SPACE-HAUC.");
-                    continue;
-                }
-                else
-                {
-                    dbprintlf(FATAL "Failed to acquire sw_data_lock.");
-                    continue;
-                }
-
-                // TODO: Figure out how to ask for a repeat if necessary.
-                // Repeats are sent like so:
-                // gs_transmit(global_data->network_data, CS_TYPE_DATA, CS_ENDPOINT_ROOFUHF, rept_cmd, sizeof(rept_cmd));
-
-                if (!memcmp(rept_cmd, rd_buf, 5))
-                { // We read in a REPT CMD, so repeat last.
-                    dbprintlf(YELLOW_FG "Repeat of previous transmission requested.");
-                    continue;
-                }
-
-                if (sr_rep->cmd != SW_UPD_SRID)
-                {
-                    continue;
-                }
-                else if (memcmp((char *)sr_rep->filename, filename, fn_sz) != 0)
-                {
-                    continue;
-                }
-                else if (sr_rep->recv_bytes != sent_bytes)
-                {
-                    // We should yield to SH here.
-                    gs_sw_set_sent_bytes(filename, sr_rep->recv_bytes);
-                    sent_bytes = sr_rep->recv_bytes;
-                    sent_packets = (sent_bytes / SW_UPD_DATA_SIZE_MAX) + ((sent_bytes % SW_UPD_DATA_SIZE_MAX) > 0);
-
-                    continue;
-                }
-                else if (sr_rep->total_packets != max_packets)
-                {
-                    continue;
-                }
-                else
-                {
-                    mode = data;
-                    break;
-                }
-            }
-            if (!global->sw_updating)
-            {
-                // Update aborted.
-                dbprintlf(YELLOW_FG "Update aborted.");
-                return NULL;
-            }
-
-            break; // case primer
-        }
-
-        case data:
-        {
-
-            memset(wr_buf, 0x0, SW_UPD_PACKET_SIZE);
-            sw_upd_data_t *dt_hdr = (sw_upd_data_t *)wr_buf;
-
-            sw_upd_data_reply_t *dt_rep = (sw_upd_data_reply_t *)rd_buf;
-
-            for (send_attempts = 0; (send_attempts < SW_UPD_MAX_SEND_ATTEMPTS) && global->sw_updating; send_attempts++)
-            {
-                fseek(bin_fp, sent_packets * SW_UPD_DATA_SIZE_MAX, SEEK_SET);
-                in_sz = fread(wr_buf + sizeof(sw_upd_data_t), 0x1, SW_UPD_DATA_SIZE_MAX, bin_fp);
-
-                if (in_sz <= 0)
-                {
-                    dbprintlf(RED_FG "Reached EOF when retrieving packet %d.", sent_packets);
-                    break;
-                }
-
-                dt_hdr->cmd = SW_UPD_DTID;
-                dt_hdr->packet_number = sent_packets;
-                dt_hdr->total_bytes = file_size;
-                dt_hdr->data_size = in_sz;
-
-                memcpy(wr_buf, dt_hdr, sizeof(sw_upd_data_t));
-
-                // retval = gs_transmit(global->network_data, CS_TYPE_DATA, CS_ENDPOINT_ROOFUHF, wr_buf, SW_UPD_PACKET_SIZE);
-                NetFrame *network_frame = new NetFrame((unsigned char *)wr_buf, SW_UPD_PACKET_SIZE, NetType::DATA, NetVertex::ROOFUHF);
-                network_frame->sendFrame(global->network_data);
-                delete network_frame;
-
-                if (retval <= 0)
-                {
-                    dbprintlf(RED_FG "DATA packet writing failed (%d).", retval);
-                    continue;
-                }
-
-                dbprintlf("Will await N/ACK.");
-                memset(rd_buf, 0x0, SW_UPD_PACKET_SIZE);
-
-                // TODO: Figure out a better way to wait for new data.
-                while (!global->sw_output_fresh && global->sw_updating)
-                {
-                    dbprintlf("Waiting for response...");
-                    usleep(0.1 SEC);
-                }
-
-                // Timeout after waiting for 15 seconds.
-                struct timespec timeout;
-                clock_gettime(CLOCK_REALTIME, &timeout);
-                timeout.tv_sec += 15;
-
-                int retval = pthread_mutex_timedlock(global->sw_output_lock, &timeout);
-
-                if (retval == 0)
-                {
-                    memcpy(rd_buf, global->sw_output->data, global->sw_output->data_size);
-                    global->sw_output_fresh = false;
-                    pthread_mutex_unlock(global->sw_output_lock);
-                }
-                else if (retval == ETIMEDOUT)
-                {
-                    // NOTE: Continues if timeout.
-                    dbprintlf(YELLOW_FG "Lock acquisition timed out: failed to receive a response from SPACE-HAUC.");
-                    continue;
-                }
-                else
-                {
-                    dbprintlf(FATAL "Failed to acquire sw_data_lock.");
-                    continue;
-                }
-
-                // TODO: Figure out how to ask for a repeat if necessary.
-                // Repeats are sent like so:
-                // gs_transmit(global_data->network_data, CS_TYPE_DATA, CS_ENDPOINT_ROOFUHF, rept_cmd, sizeof(rept_cmd));
-
-                if (!memcmp(rept_cmd, rd_buf, 5))
-                { // We read in a REPT CMD, so repeat last.
-                    dbprintlf(YELLOW_FG "Repeat of previous transmission requested.");
-                    continue;
-                }
-
-                if (dt_rep->cmd != SW_UPD_DTID)
-                {
-                    continue;
-                }
-                else if (dt_rep->packet_number != sent_packets)
-                {
-                    mode = primer;
-                    break;
-                }
-                else if (dt_rep->total_packets != max_packets)
-                {
-                    continue;
-                }
-                else
-                {
-                    sent_bytes += dt_hdr->data_size;
-                    gs_sw_set_sent_bytes(filename, sent_bytes);
-                    sent_packets++;
-
-                    if (sent_bytes >= file_size)
-                    {
-                        mode = transfer_complete;
-                    }
-
-                    break;
-                }
-            }
-            if (!global->sw_updating)
-            {
-                // Update aborted.
-                dbprintlf(YELLOW_FG "Update aborted.");
-                return NULL;
-            }
-            break; // case data
-        }
-
-        case transfer_complete:
-        {
-            if (sent_bytes == file_size)
-            {
-                // Complete
-                dbprintlf("File transfer complete with %ld/%ld bytes of %s having been successfully sent and confirmed per packet.", sent_bytes, file_size, filename);
-            }
-            else if (global->sw_updating)
-            {
-                // Interrupted
-                dbprintlf(YELLOW_FG "File transfer interrupted with %ld/%ld bytes of %s having been successfully sent and confirmed per packet.", sent_bytes, file_size, filename);
-            }
-            else if (sent_bytes <= 0)
-            {
-                // Error
-                dbprintlf(RED_FG "An error has been encountered with %ld/%ld bytes of %s sent.", sent_bytes, file_size, filename);
-                global->sw_updating = false;
-                return NULL;
-            }
-            else
-            {
-                /// NOTE: Will reach this case if (recv_bytes != file_size).
-                // ???
-                dbprintlf(FATAL "Confused.");
-                global->sw_updating = false;
-                return NULL;
-            }
-
-            mode = confirmation;
-
-            break; // case transfer_complete
-        }
-
-        case confirmation:
-        {
-            sw_upd_conf_t *cf_hdr = (sw_upd_conf_t *)wr_buf;
-            sw_upd_conf_reply_t *cf_rep = (sw_upd_conf_reply_t *)rd_buf;
-
-            cf_hdr->cmd = SW_UPD_CFID;
-            cf_hdr->packet_number = sent_packets;
-            cf_hdr->total_packets = max_packets;
-
-            checksum_md5(directory_filename, cf_hdr->hash, 32);
-
-            // retval = gs_transmit(global->network_data, CS_TYPE_DATA, CS_ENDPOINT_ROOFUHF, wr_buf, SW_UPD_PACKET_SIZE);
-            NetFrame *network_frame = new NetFrame((unsigned char *)wr_buf, SW_UPD_PACKET_SIZE, NetType::DATA, NetVertex::ROOFUHF);
-            network_frame->sendFrame(global->network_data);
-            delete network_frame;
-
-            if (retval <= 0)
-            {
-                dbprintlf(RED_FG "CF header writing failed (%d).", retval);
-                continue;
-            }
-
-            dbprintlf("Will await N/ACK.");
-            memset(rd_buf, 0x0, SW_UPD_PACKET_SIZE);
-
-            // TODO: Figure out a better way to wait for new data.
-            while (!global->sw_output_fresh && global->sw_updating)
-            {
-                dbprintlf("Waiting for response...");
-                usleep(0.1 SEC);
-            }
-            if (!global->sw_updating)
-            {
-                // Update aborted.
-                dbprintlf(YELLOW_FG "Update aborted.");
-                return NULL;
-            }
-
-            // Timeout after waiting for 15 seconds.
-            struct timespec timeout;
-            clock_gettime(CLOCK_REALTIME, &timeout);
-            timeout.tv_sec += 15;
-
-            int retval = pthread_mutex_timedlock(global->sw_output_lock, &timeout);
-
-            if (retval == 0)
-            {
-                memcpy(rd_buf, global->sw_output->data, global->sw_output->data_size);
-                global->sw_output_fresh = false;
-                pthread_mutex_unlock(global->sw_output_lock);
-            }
-            else if (retval == ETIMEDOUT)
-            {
-                // NOTE: Continues if timeout.
-                dbprintlf(YELLOW_FG "Lock acquisition timed out: failed to receive a response from SPACE-HAUC.");
-                continue;
-            }
-            else
-            {
-                dbprintlf(FATAL "Failed to acquire sw_data_lock.");
-                continue;
-            }
-
-            // TODO: Figure out how to ask for a repeat if necessary.
-            // Repeats are sent like so:
-            // gs_transmit(global_data->network_data, CS_TYPE_DATA, CS_ENDPOINT_ROOFUHF, rept_cmd, sizeof(rept_cmd));
-
-            if (!memcmp(rept_cmd, rd_buf, 5))
-            { // We read in a REPT CMD, so repeat last.
-                dbprintlf(YELLOW_FG "Repeat of previous transmission requested.");
-                continue;
-            }
-
-            if (cf_rep->cmd != SW_UPD_CFID)
-            {
-                break;
-            }
-            else if (cf_rep->total_packets != max_packets)
-            {
-                break;
-            }
-            else if (cf_rep->request_packet == REQ_PKT_RESEND)
-            {
-                break;
-            }
-            else if (cf_rep->request_packet >= 0)
-            {
-                if (cf_rep->request_packet > max_packets)
-                {
-                    break;
-                }
-                else if (cf_rep->request_packet <= max_packets)
-                {
-                    sent_packets = cf_rep->request_packet;
-                    sent_bytes = SW_UPD_DATA_SIZE_MAX * sent_packets;
-                    gs_sw_set_sent_bytes(filename, sent_bytes);
-                    mode = primer;
-                    break;
-                }
-            }
-            else if (memcmp(cf_rep->hash, cf_hdr->hash, SW_UPD_HASH_SIZE) != 0)
-            {
-                dbprintlf(FATAL "Restarting file transfer.");
-                sent_packets = 0;
-                sent_bytes = 0;
-                gs_sw_set_sent_bytes(filename, 0);
-                mode = primer;
-            }
-            else
-            {
-                dbprintlf(BLUE_BG "File transfer complete.");
-                mode = finish;
-            }
-
-            break; // case confirmation
-        }
-
-        case finish:
-        {
-            dbprintlf("The file transfer is now complete.");
-            global->sw_upd_packet = -1;
-            break; // case finish
-        }
-        }
-    }
-
-    global->sw_updating = false;
-    return NULL;
-}
-
-ssize_t gs_sw_get_sent_bytes(const char filename[])
-{
-    // Read from {filename}.sent_bytes to see if this file was already mid-transfer and needs to continue at some specific point.
-    char filename_bytes[128];
-    snprintf(filename_bytes, 128, "%s.%s", filename, "gsbytes");
-
-    int bytes_fp = -1;
-    ssize_t sent_bytes = 0;
-
-    if (access(filename_bytes, F_OK) == 0)
-    {
-        // File exists.
-        bytes_fp = open(filename_bytes, O_RDONLY);
-        if (bytes_fp < 3)
-        {
-            dbprintlf(RED_FG "%s exists but could not be opened.", filename_bytes);
-            return ERR_FILE_OPEN;
-        }
-        lseek(bytes_fp, 0, SEEK_SET);
-        if (read(bytes_fp, &sent_bytes, sizeof(ssize_t)) != sizeof(ssize_t))
-        {
-            dbprintlf(RED_FG "Error reading sent_bytes.");
-        }
-        dbprintlf(YELLOW_FG "%ld bytes of current transfer previously received by SH.", sent_bytes);
-        close(bytes_fp);
-    }
-    else
-    {
-        // File does not exist.
-        bytes_fp = open(filename_bytes, O_CREAT | O_EXCL, 0755);
-        if (bytes_fp < 3)
-        {
-            dbprintlf(RED_FG "%s does not exist and could not be created.", filename_bytes);
-            return ERR_FILE_OPEN;
-        }
-        lseek(bytes_fp, 0, SEEK_SET);
-        int retval = write(bytes_fp, &sent_bytes, sizeof(ssize_t));
-        if (retval != sizeof(ssize_t))
-        {
-            dbprintlf(RED_FG "Error %d", retval);
-        }
-        dbprintlf(YELLOW_FG "%s does not exist. Assuming transfer should start at packet 0.", filename_bytes);
-        close(bytes_fp);
-    }
-    sync();
-    return sent_bytes;
-}
-
-int gs_sw_set_sent_bytes(const char filename[], ssize_t sent_bytes)
-{
-    // Overwrite {filename}.bytes to contain {sent_bytes}.
-    char filename_bytes[128];
-    snprintf(filename_bytes, 128, "%s.%s", filename, "gsbytes");
-
-    int bytes_fp = -1;
-    bytes_fp = open(filename_bytes, O_RDWR | O_TRUNC);
-    if (bytes_fp < 3)
-    {
-        dbprintlf(RED_FG "Could not open %s for overwriting.", filename_bytes);
-        return ERR_FILE_OPEN;
-    }
-    lseek(bytes_fp, 0, SEEK_SET);
-    if (write(bytes_fp, &sent_bytes, sizeof(ssize_t)) != sizeof(ssize_t))
-    {
-        dbprintlf(RED_FG "Could not write to %s", filename_bytes);
-    }
-    close(bytes_fp);
-
-    sync();
-    return 1;
 }
