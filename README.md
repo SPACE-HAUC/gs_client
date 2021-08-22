@@ -1,6 +1,7 @@
 # SPACE-HAUC Ground Station GUI Client
 Graphical user interface for SPACE-HAUC Ground Station operations. Intended to be used with the SPACE-HAUC Ground Station Network.
 
+#SPACE-HAUC Ground Station
 ## The Network
 [GUI Client](https://github.com/SPACE-HAUC/gs_client) (SPACE-HAUC/gs_client)
 
@@ -27,9 +28,11 @@ _Roof UHF_ (release, tested)
 
 The UHF transmit / receive system operates nominally, successfully sending and receiving data, ensuring its integrity.
 
-_Roof X-Band_ (beta, requires hardware testing)
+_Roof X-Band_ (release, tested)
 
-_Haystack_ (beta, requires hardware testing)
+_Haystack_ (release, tested)
+
+_Track_ (requires integration)   
 
 ## Connections Testing  
 
