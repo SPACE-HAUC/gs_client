@@ -2,6 +2,7 @@
 Graphical user interface for SPACE-HAUC Ground Station operations. Intended to be used with the SPACE-HAUC Ground Station Network.
 
 #SPACE-HAUC Ground Station
+
 ## The Network
 [GUI Client](https://github.com/SPACE-HAUC/gs_client) (SPACE-HAUC/gs_client)
 
