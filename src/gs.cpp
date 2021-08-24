@@ -240,6 +240,8 @@ void *gs_rx_thread(void *args)
                 (global->netstat & 0x20) == 0x20 ? global->xbtx_avail = true : global->xbtx_avail = false;
                 (global->netstat & 0x10) == 0x10 ? global->xbrx_avail = true : global->xbtx_avail = false;
 
+                global->last_contact = ImGui::GetTime();
+
                 // Based on what we got, set things to display the data.
                 switch (netframe->getType())
                 {
