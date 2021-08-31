@@ -17,7 +17,7 @@ Graphical user interface for SPACE-HAUC Ground Station operations. Intended to b
 [Tracker](https://github.com/SPACE-HAUC/gs_track) (SPACE-HAUC/gs_track)
   
 ## Current State
-_GUI Client_ (beta, tested)
+_GUI Client_ (release, tested)
 
 The Client packages and sends NetworkFrames over a socket connection. The outbound connection is opened by the operator via the Connections Manager window. Currently, sent and received data can be viewed either through the Linux Terminal or in the 'Plaintext RX Display' and 'ACS Update Display' windows. NetworkFrames undergo an integrity check prior to leaving and when they are received. The Client will periodically send null NetworkFrames to the Ground Station Network Server for status information on the devices connected to the Network. The other Network devices should connect to the server automatically. 
 
@@ -31,7 +31,13 @@ The UHF transmit / receive system operates nominally, successfully sending and r
 
 _Roof X-Band_ (release, tested)
 
+X-Band RX and Network communications tested and confirmed as working.
+
 _Haystack_ (release, tested)
+
+X-Band TX and Network communications tested and confirmed as working.
+
+At Haystack, communication from Haystack to server and network tested and confirmed.
 
 _Track_ (requires integration)   
 
