@@ -1343,7 +1343,7 @@ void gs_gui_xband_tx_window(global_data_t *global, bool *XBAND_TX_window, int ac
 
             // dbprintlf(RED_BG "Sending MTU of %u", txphy->MTU);
 
-            NetFrame *network_frame = new NetFrame((unsigned char *)&txphy, sizeof(phy_config_t), NetType::XBAND_CONFIG, NetVertex::ROOFXBAND);
+            NetFrame *network_frame = new NetFrame((unsigned char *)txphy, sizeof(phy_config_t), NetType::XBAND_CONFIG, NetVertex::ROOFXBAND);
             network_frame->sendFrame(network_data);
             delete network_frame;
         }
@@ -1475,10 +1475,12 @@ void gs_gui_xband_rx_window(global_data_t *global, bool *XBAND_RX_window, int ac
         if (ImGui::Button("Apply Configuration##RX"))
         {
             global->refresh_rx_ui_data = true;
-
+            dbprintlf(RED_BG "RXMODE: %d", global->rxmode);
+            dbprintlf(RED_BG "rx_armed: %d", global->rx_armed);
             if (global->rxmode)
             {
                 rxphy->mode = global->rxmode;
+                dbprintlf(RED_BG "RXPHY->MODE: %d", rxphy->mode);
                 rxphy->samp = MHZ(global->rx_samp);
                 rxphy->LO = MHZ(global->rx_lo);
                 rxphy->bw = MHZ(global->rx_bw);
@@ -1486,7 +1488,7 @@ void gs_gui_xband_rx_window(global_data_t *global, bool *XBAND_RX_window, int ac
             else if (!global->rx_armed)
                 rxphy->mode = global->rxmode;
 
-            NetFrame *network_frame = new NetFrame((unsigned char *)&rxphy, sizeof(phy_config_t), NetType::XBAND_CONFIG, NetVertex::HAYSTACK);
+            NetFrame *network_frame = new NetFrame((unsigned char *)rxphy, sizeof(phy_config_t), NetType::XBAND_CONFIG, NetVertex::HAYSTACK);
             network_frame->sendFrame(network_data);
             delete network_frame;
         }
