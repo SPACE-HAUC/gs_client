@@ -2156,10 +2156,10 @@ void gs_gui_conns_manager_window(bool *CONNS_manager, int access_level, bool all
         {
             ImGui::BeginTooltip();
             ImGui::Text("Server Ports");
-            ImGui::Text("54200: GUI Client");
-            ImGui::Text("54210: Roof UHF");
-            ImGui::Text("54220: Roof X-Band");
-            ImGui::Text("54230: Haystack");
+            ImGui::Text("52000: GUI Client");
+            ImGui::Text("52010: Roof UHF");
+            ImGui::Text("52020: Roof X-Band");
+            ImGui::Text("52030: Haystack");
             ImGui::EndTooltip();
         }
 
@@ -2172,7 +2172,10 @@ void gs_gui_conns_manager_window(bool *CONNS_manager, int access_level, bool all
             {
                 last_connect_attempt_time = ImGui::GetTime();
 
-                gui_connect_status = gs_connect_to_server(network_data);
+                dbprintlf(BLUE_FG "Attempting connection to: %s", destination_ipv4);
+
+                gui_connect_status = gs_connect_to_server(network_data, destination_ipv4);
+
                 // network_data->server_ip->sin_port = htons(destination_port);
                 // if ((network_data->socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
                 // {
@@ -2319,20 +2322,20 @@ void gs_gui_acs_upd_display_window(ACSRollingBuffer *acs_rolbuf, bool *ACS_UPD_d
 
     if (global->settings->acs_multiple_windows)
     {
-        if (ImGui::Begin("ACS Update: CT / Mode Graph", ACS_UPD_display))
-        {
-            ImPlot::SetNextPlotLimits(start_time, acs_rolbuf->x_index, getMin(acs_rolbuf->mode.Min(), acs_rolbuf->ct.Min()), getMax(acs_rolbuf->mode.Max(), acs_rolbuf->ct.Max()), ImGuiCond_Always);
-            if (ImPlot::BeginPlot("CT / Mode Graph"))
-            {
+        // if (ImGui::Begin("ACS Update: CT / Mode Graph", ACS_UPD_display))
+        // {
+        //     ImPlot::SetNextPlotLimits(start_time, acs_rolbuf->x_index, getMin(acs_rolbuf->mode.Min(), acs_rolbuf->ct.Min()), getMax(acs_rolbuf->mode.Max(), acs_rolbuf->ct.Max()), ImGuiCond_Always);
+        //     if (ImPlot::BeginPlot("CT / Mode Graph"))
+        //     {
 
-                ImPlot::PlotLine("CT", &acs_rolbuf->ct.data[0].x, &acs_rolbuf->ct.data[0].y, acs_rolbuf->ct.data.size(), acs_rolbuf->ct.ofst, 2 * sizeof(float));
+        //         ImPlot::PlotLine("CT", &acs_rolbuf->ct.data[0].x, &acs_rolbuf->ct.data[0].y, acs_rolbuf->ct.data.size(), acs_rolbuf->ct.ofst, 2 * sizeof(float));
 
-                ImPlot::PlotLine("Mode", &acs_rolbuf->mode.data[0].x, &acs_rolbuf->mode.data[0].y, acs_rolbuf->mode.data.size(), acs_rolbuf->mode.ofst, 2 * sizeof(float));
+        //         ImPlot::PlotLine("Mode", &acs_rolbuf->mode.data[0].x, &acs_rolbuf->mode.data[0].y, acs_rolbuf->mode.data.size(), acs_rolbuf->mode.ofst, 2 * sizeof(float));
 
-                ImPlot::EndPlot();
-            }
-        }
-        ImGui::End();
+        //         ImPlot::EndPlot();
+        //     }
+        // }
+        // ImGui::End();
 
         if (ImGui::Begin("ACS Update: B (x, y, z) Graph", ACS_UPD_display))
         {
@@ -2406,9 +2409,9 @@ void gs_gui_acs_upd_display_window(ACSRollingBuffer *acs_rolbuf, bool *ACS_UPD_d
             if (ImPlot::BeginPlot("Solar Current Graph"))
             {
 
-                ImPlot::PlotLine("CurSun", &acs_rolbuf->cursun.data[0].x, &acs_rolbuf->cursun.data[0].y, acs_rolbuf->cursun.data.size(), acs_rolbuf->cursun.ofst, 2 * sizeof(float));
+                ImPlot::PlotLine("I (solar)", &acs_rolbuf->cursun.data[0].x, &acs_rolbuf->cursun.data[0].y, acs_rolbuf->cursun.data.size(), acs_rolbuf->cursun.ofst, 2 * sizeof(float));
 
-                ImPlot::PlotLine("CurSys", &acs_rolbuf->cursys.data[0].x, &acs_rolbuf->cursys.data[0].y, acs_rolbuf->cursys.data.size(), acs_rolbuf->cursys.ofst, 2 * sizeof(float));
+                ImPlot::PlotLine("I (system)", &acs_rolbuf->cursys.data[0].x, &acs_rolbuf->cursys.data[0].y, acs_rolbuf->cursys.data.size(), acs_rolbuf->cursys.ofst, 2 * sizeof(float));
 
                 ImPlot::EndPlot();
             }
@@ -2422,19 +2425,19 @@ void gs_gui_acs_upd_display_window(ACSRollingBuffer *acs_rolbuf, bool *ACS_UPD_d
             // The implemented method of displaying the ACS update data includes a locally-global class (ACSDisplayData) with data that this window will display. The data is set by gs_receive.
             // NOTE: This window must be opened independent of ACS's automated data retrieval option.
 
-            if (ImGui::CollapsingHeader("CT / Mode Graph", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImPlot::SetNextPlotLimits(start_time, acs_rolbuf->x_index, getMin(acs_rolbuf->mode.Min(), acs_rolbuf->ct.Min()), getMax(acs_rolbuf->mode.Max(), acs_rolbuf->ct.Max()), ImGuiCond_Always);
-                if (ImPlot::BeginPlot("CT / Mode Graph"))
-                {
+            // if (ImGui::CollapsingHeader("CT / Mode Graph", ImGuiTreeNodeFlags_DefaultOpen))
+            // {
+            //     ImPlot::SetNextPlotLimits(start_time, acs_rolbuf->x_index, getMin(acs_rolbuf->mode.Min(), acs_rolbuf->ct.Min()), getMax(acs_rolbuf->mode.Max(), acs_rolbuf->ct.Max()), ImGuiCond_Always);
+            //     if (ImPlot::BeginPlot("CT / Mode Graph"))
+            //     {
 
-                    ImPlot::PlotLine("CT", &acs_rolbuf->ct.data[0].x, &acs_rolbuf->ct.data[0].y, acs_rolbuf->ct.data.size(), acs_rolbuf->ct.ofst, 2 * sizeof(float));
+            //         ImPlot::PlotLine("CT", &acs_rolbuf->ct.data[0].x, &acs_rolbuf->ct.data[0].y, acs_rolbuf->ct.data.size(), acs_rolbuf->ct.ofst, 2 * sizeof(float));
 
-                    ImPlot::PlotLine("Mode", &acs_rolbuf->mode.data[0].x, &acs_rolbuf->mode.data[0].y, acs_rolbuf->mode.data.size(), acs_rolbuf->mode.ofst, 2 * sizeof(float));
+            //         ImPlot::PlotLine("Mode", &acs_rolbuf->mode.data[0].x, &acs_rolbuf->mode.data[0].y, acs_rolbuf->mode.data.size(), acs_rolbuf->mode.ofst, 2 * sizeof(float));
 
-                    ImPlot::EndPlot();
-                }
-            }
+            //         ImPlot::EndPlot();
+            //     }
+            // }
 
             if (ImGui::CollapsingHeader("B (x, y, z) Graph", ImGuiTreeNodeFlags_DefaultOpen))
             {
@@ -2504,9 +2507,9 @@ void gs_gui_acs_upd_display_window(ACSRollingBuffer *acs_rolbuf, bool *ACS_UPD_d
                 if (ImPlot::BeginPlot("Solar Current Graph"))
                 {
 
-                    ImPlot::PlotLine("CurSun", &acs_rolbuf->cursun.data[0].x, &acs_rolbuf->cursun.data[0].y, acs_rolbuf->cursun.data.size(), acs_rolbuf->cursun.ofst, 2 * sizeof(float));
+                    ImPlot::PlotLine("I (solar)", &acs_rolbuf->cursun.data[0].x, &acs_rolbuf->cursun.data[0].y, acs_rolbuf->cursun.data.size(), acs_rolbuf->cursun.ofst, 2 * sizeof(float));
 
-                    ImPlot::PlotLine("CurSys", &acs_rolbuf->cursys.data[0].x, &acs_rolbuf->cursys.data[0].y, acs_rolbuf->cursys.data.size(), acs_rolbuf->cursys.ofst, 2 * sizeof(float));
+                    ImPlot::PlotLine("I (system)", &acs_rolbuf->cursys.data[0].x, &acs_rolbuf->cursys.data[0].y, acs_rolbuf->cursys.data.size(), acs_rolbuf->cursys.ofst, 2 * sizeof(float));
 
                     ImPlot::EndPlot();
                 }
