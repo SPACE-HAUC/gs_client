@@ -180,6 +180,7 @@ void *gs_acs_update_thread(void *global_data_vp)
     // Transmit an ACS update request to the server.
     // gs_transmit(global_data->network_data, CS_TYPE_DATA, CS_ENDPOINT_ROOFUHF, acs_cmd, sizeof(cmd_input_t));
     NetFrame *network_frame = new NetFrame((unsigned char *)acs_cmd, sizeof(cmd_input_t), NetType::DATA, NetVertex::ROOFUHF);
+    dbprintlf(BLUE_FG "SENT ACS UPDATE REQUEST PACKET");
     network_frame->sendFrame(global->network_data);
     delete network_frame;
 

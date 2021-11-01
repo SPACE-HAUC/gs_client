@@ -461,32 +461,49 @@ void gs_gui_acs_window(global_data_t *global, bool *ACS_window, int access_level
                 }
             }
 
-            ImGui::Text("ACS Data-down Update (every 100ms)");
-            if (ImGui::Button("Toggle ACS Update") && allow_transmission)
+            if (ImGui::Button("Inhibit ACS Update this Pass") && allow_transmission)
             {
-                acs_rxtx_automated = !acs_rxtx_automated;
+                cs_config_uhf_t uhf_conf[1] = {0};
+                uhf_conf->inhibit_acs = 1;
+                NetFrame *acsframe = new NetFrame((unsigned char *)uhf_conf, sizeof(cs_config_uhf_t), NetType::UHF_CONFIG, NetVertex::ROOFUHF);
+                delete acsframe;
             }
 
-            if (acs_rxtx_automated)
+            if (global->cs_config_uhf->inhibit_acs == 1)
             {
-                ImGui::PushStyleColor(0, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
-                ImGui::SameLine();
-                ImGui::Text("ACTIVE");
-                ImGui::PopStyleColor();
-
-                // Spawn a thread to execute gs_acs_update_data_handler(...) once.
-                if (pthread_mutex_trylock(&global->acs_rolbuf->acs_upd_inhibitor) == 0)
-                {
-                    pthread_create(&acs_thread_id, NULL, gs_acs_update_thread, global);
-                }
+                ImGui::TextColored(ImVec4(1.0f, 0, 0, 1.0f), "ACS INHIBITED");
             }
             else
             {
-                ImGui::PushStyleColor(0, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-                ImGui::SameLine();
-                ImGui::Text("INACTIVE");
-                ImGui::PopStyleColor();
+                ImGui::TextColored(ImVec4(0, 1.0f, 0, 1.0f), "ACS UNINHIBITED");
             }
+
+            // ImGui::Text("ACS Data-down Update (every 100ms)");
+            // if (ImGui::Button("Toggle ACS Update") && allow_transmission)
+            // {
+            //     acs_rxtx_automated = !acs_rxtx_automated;
+            // }
+
+            // if (acs_rxtx_automated)
+            // {
+            //     ImGui::PushStyleColor(0, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
+            //     ImGui::SameLine();
+            //     ImGui::Text("ACTIVE");
+            //     ImGui::PopStyleColor();
+
+            //     // Spawn a thread to execute gs_acs_update_data_handler(...) once.
+            //     if (pthread_mutex_trylock(&global->acs_rolbuf->acs_upd_inhibitor) == 0)
+            //     {
+            //         pthread_create(&acs_thread_id, NULL, gs_acs_update_thread, global);
+            //     }
+            // }
+            // else
+            // {
+            //     ImGui::PushStyleColor(0, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+            //     ImGui::SameLine();
+            //     ImGui::Text("INACTIVE");
+            //     ImGui::PopStyleColor();
+            // }
 
             if (!allow_transmission)
             {

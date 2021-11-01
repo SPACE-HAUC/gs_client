@@ -342,7 +342,7 @@ typedef struct
 // NOTE: No UHF configurations exist at this time.
 typedef struct
 {
-
+    uint8_t inhibit_acs;
 } cs_config_uhf_t;
 
 /**
